@@ -1,7 +1,11 @@
-/**
- * @author zsj
- * @date 2026/9/9
- * @description 
- */
+package top.mqxu.config.entity;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication(scanBasePackages = "top.mqxu.config")
 public class ConfigApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(ConfigApplication.class, args);
+    }
 }

@@ -1,0 +1,11 @@
+server:
+  port: 9090
+
+spring:
+  application:
+    name: 配置管理
+
+mqxu:
+  name: 张世杰
+  job: 学生
+
