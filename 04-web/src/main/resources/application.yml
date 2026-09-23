@@ -1,0 +1,26 @@
+server:
+  port: 8004
+
+spring:
+  application:
+    name: 04-web
+
+  # Jackson 序列化配置
+  jackson:
+    # 全局日期格式：LocalDate / LocalDateTime 都按这个格式输出
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: Asia/Shanghai
+    # 序列化时忽略值为 null 的字段（前端拿到的 JSON 更干净）
+    default-property-inclusion: non_null
+
+  # 请求体过大/表单限制（演示用，实际按需调整）
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 100MB
+
+# 日志：把自己写的包调到 DEBUG，方便观察参数绑定过程
+logging:
+  level:
+    top.zsj.web: debug
+    org.springframework.web: info

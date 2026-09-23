@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    ============================================================================
+    04-web 模块的日志配置
+    文件名必须是 logback-spring.xml，不能是 logback.xml：
+      · logback.xml       —— logback 自己最早加载，那时 Spring 的 Environment 还不存在，
+                             <springProfile> 会导致加载失败；
+      · logback-spring.xml —— 由 Spring Boot 的 LogbackLoggingSystem 加载，
+                             可以读取 spring.profiles.active，从而按环境切换日志策略。
+    注意：本文件是 XML，注释里禁止出现连续两个短横线，否则启动直接报
+         "注释中不允许出现字符串" 并抛 IllegalStateException: Could not initialize Logback。
+    ============================================================================
+-->
+<configuration scan="false">
+
+    <!--
+        引入 Spring Boot 的默认定义文件，作用是注册这几个转换词：
+          %clr  —— 给内容着色（ColorConverter）
+          %wex  —— 异常堆栈的换行处理
+        没有这一行，下面用到 %clr 时会报
+        "There is no conversion class registered for conversion word [clr]"。
+        defaults.xml 只含转换词定义、不含任何 appender，所以不会产生重复输出。
+    -->
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+
+    <!-- ==================== 变量定义 ==================== -->
+    <!-- 日志目录：默认 logs（相对进程工作目录，IDEA 里就是模块根目录） -->
+    <property name="LOG_HOME" value="${LOG_DIR:-logs}"/>
+    <property name="APP_NAME" value="04-web"/>
+
+    <!-- 控制台格式：带颜色、时间只留时分秒毫秒、logger 名定长 40 截断 -->
+    <property name="CONSOLE_PATTERN"
+              value="%clr(%d{HH:mm:ss.SSS}){faint} %clr(%5p) %clr(${PID:- }){magenta} %clr(---){faint} %clr([%15.15t]){faint} %clr(%-40.40logger{39}){cyan} %clr(:){faint} %m%n${LOG_EXCEPTION_CONVERSION_WORD:-%wEx}"/>
+
+    <!-- 文件格式：不带颜色（%clr 会把 ANSI 转义码原样落盘变成乱码）、时间带完整日期 -->
+    <property name="FILE_PATTERN"
+              value="%d{yyyy-MM-dd HH:mm:ss.SSS} %5p ${PID:- } --- [%15.15t] %-40.40logger{39} : %m%n%wEx"/>
+
+    <!-- ==================== 输出目的地 1：控制台（彩色） ==================== -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>${CONSOLE_PATTERN}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <!-- ==================== 输出目的地 2：文件（滚动 + 压缩） ==================== -->
+    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_HOME}/${APP_NAME}.log</file>
+        <!--
+            滚动策略：按"时间 + 大小"滚动
+              %d{yyyy-MM-dd} 每天一个；%i 同一天内超过 maxFileSize 就递增编号
+              maxHistory     历史文件最多保留 30 天
+              totalSizeCap   所有历史文件总大小上限 1GB
+        -->
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_HOME}/${APP_NAME}.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+            <maxFileSize>10MB</maxFileSize>
+            <maxHistory>30</maxHistory>
+            <totalSizeCap>1GB</totalSizeCap>
+        </rollingPolicy>
+        <encoder>
+            <pattern>${FILE_PATTERN}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <!-- ==================== 环境切换 ==================== -->
+    <!--
+        两个 springProfile 互斥且覆盖所有情况，避免出现"没有任何 appender 挂到 root"导致日志静默消失：
+          · prod    -> 只写文件、WARN 级别，控制台不输出
+          · 非 prod -> 控制台 INFO 彩色，并把本模块包调到 DEBUG 便于观察参数绑定过程
+        切换方式（application.yml 里默认 dev）：
+          · 启动参数追加 spring.profiles.active（命令行前缀是两个短横线）
+          · IDEA 里：Run Configuration -> Active profiles 填 prod
+    -->
+    <springProfile name="prod">
+        <root level="WARN">
+            <appender-ref ref="FILE"/>
+        </root>
+    </springProfile>
+
+    <springProfile name="!prod">
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+        <!-- 只放开本模块的包，不影响框架自身的 INFO 输出 -->
+        <logger name="top.zsj.web" level="DEBUG"/>
+    </springProfile>
+
+</configuration>

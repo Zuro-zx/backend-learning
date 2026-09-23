@@ -1,0 +1,68 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "03-logging 日志管理模块",
+    "description": "SLF4J 日志门面在 Spring Boot 中的使用演示：Lombok @Slf4j 注入 log 对象，日志级别 trace < debug < info < warn < error，默认输出 info 及以上。",
+    "version": "0.0.1-SNAPSHOT"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8003",
+      "description": "本地开发环境"
+    }
+  ],
+  "tags": [
+    {
+      "name": "logging",
+      "description": "日志管理接口"
+    }
+  ],
+  "paths": {
+    "/logging/hello": {
+      "get": {
+        "tags": [
+          "logging"
+        ],
+        "summary": "模块连通性检查",
+        "description": "返回模块名称，用于确认 03-logging 服务已正常启动。",
+        "operationId": "hello",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "example": "日志管理 模块"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/logging/demo": {
+      "get": {
+        "tags": [
+          "logging"
+        ],
+        "summary": "日志级别演示",
+        "description": "触发一次请求，依次打印 info / warn / error 三个级别的日志，用于观察控制台与 logback-spring.xml 的输出效果。",
+        "operationId": "demo",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "example": "ok"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

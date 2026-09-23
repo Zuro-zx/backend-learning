@@ -1,0 +1,12 @@
+${AnsiColor.BRIGHT_CYAN}
+ _____   ____         _ 
+|__  /  / ___|      | |
+  / /   \___ \  _  | |
+ / /_    ___) || |_| |
+/____|  |____/  \___/ 
+${AnsiStyle.NORMAL}
+${AnsiColor.BRIGHT_GREEN} :: 03-logging · 日志管理模块 ::${AnsiStyle.NORMAL}
+${AnsiColor.BRIGHT_BLUE} Spring Boot : ${spring-boot.version}${AnsiStyle.NORMAL}
+${AnsiColor.BRIGHT_BLUE} 当前环境   : ${spring.profiles.active:default}${AnsiStyle.NORMAL}
+${AnsiColor.BRIGHT_BLUE} 日志策略   : dev = 控制台 INFO ｜ prod = 文件 WARN${AnsiStyle.NORMAL}
+

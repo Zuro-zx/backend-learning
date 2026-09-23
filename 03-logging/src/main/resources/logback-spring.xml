@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    ============================================================================
+    03-logging 模块的日志配置（原 application.yml 里的 logging.* 全部搬到这里）
+    文件名必须是 logback-spring.xml，不能是 logback.xml：
+      · logback.xml      —— 由 logback 自己最早加载，那时 Spring 的 Environment 还不存在，
+                            <springProfile>、<springProperty> 会导致加载失败；
+      · logback-spring.xml —— 由 Spring Boot 的 LogbackLoggingSystem 加载，
+                            可以读取 spring.profiles.active，从而按环境切换日志策略。
+    ============================================================================
+-->
+<configuration scan="false">
+
+    <!--
+        引入 Spring Boot 的默认定义文件，作用是注册这几个转换词：
+          %clr  —— 给内容着色（ColorConverter）
+          %wex  —— 异常堆栈的换行处理
+          %wEx  —— 异常堆栈的换行处理（带额外缩进）
+        没有这一行，下面用到 %clr 时会报
+        "There is no conversion class registered for conversion word [clr]"。
+        注意：defaults.xml 只含"转换词 + 默认占位符"，不含任何 appender，
+        所以不会产生重复输出。
+    -->
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+
+    <!-- ==================== 变量定义 ==================== -->
+    <!--
+        日志目录：默认 logs（相对进程工作目录，IDEA 里就是模块根目录），
+        可在启动时用 -DLOG_DIR=D:/logs 覆盖。
+        这里用 LOG_HOME 承接，避免 LOG_DIR 自我引用。
+    -->
+    <property name="LOG_HOME" value="${LOG_DIR:-logs}"/>
+    <property name="APP_NAME" value="03-logging"/>
+
+    <!-- 控制台格式：带颜色、时间只留时分秒毫秒、logger 名定长 40 截断 -->
+    <!--   %clr(内容){颜色}：颜色可选 faint/blue/cyan/green/magenta/red/yellow
+           %clr(%5p) 不写颜色参数时按级别自动着色：INFO=绿、WARN=黄、ERROR=红
+           %-40.40logger{39}：- 左对齐、最小宽 40、最大宽 40、包名缩写阈值 39 -->
+    <property name="CONSOLE_PATTERN"
+              value="%clr(%d{HH:mm:ss.SSS}){faint} %clr(%5p) %clr(${PID:- }){magenta} %clr(---){faint} %clr([%15.15t]){faint} %clr(%-40.40logger{39}){cyan} %clr(:){faint} %m%n${LOG_EXCEPTION_CONVERSION_WORD:-%wEx}"/>
+
+    <!-- 文件格式：不带颜色（%clr 会把 ANSI 转义码原样落盘，变成乱码）、时间带完整日期 -->
+    <property name="FILE_PATTERN"
+              value="%d{yyyy-MM-dd HH:mm:ss.SSS} %5p ${PID:- } --- [%15.15t] %-40.40logger{39} : %m%n%wEx"/>
+
+    <!-- ==================== 输出目的地 1：控制台（彩色） ==================== -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>${CONSOLE_PATTERN}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <!-- ==================== 输出目的地 2：文件（滚动 + 压缩） ==================== -->
+    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <!-- 当前正在写的文件 -->
+        <file>${LOG_HOME}/${APP_NAME}.log</file>
+        <!--
+            滚动策略：同时按"时间 + 大小"滚动
+              %d{yyyy-MM-dd} 每天一个；%i 同一天内超过 maxFileSize 就递增编号
+              maxHistory     历史文件最多保留 30 天
+              totalSizeCap   所有历史文件总大小上限 1GB，超出从最旧的开始删
+        -->
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_HOME}/${APP_NAME}.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+            <maxFileSize>10MB</maxFileSize>
+            <maxHistory>30</maxHistory>
+            <totalSizeCap>1GB</totalSizeCap>
+        </rollingPolicy>
+        <encoder>
+            <pattern>${FILE_PATTERN}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <!-- ==================== 环境切换 ==================== -->
+    <!--
+        两个 springProfile 互斥，正好覆盖所有情况，避免出现"没有任何 appender"导致日志凭空消失：
+          · prod        -> 生产环境：只写文件、WARN 级别，控制台不输出（省 IO、省磁盘）
+          · 非 prod     -> 开发环境（dev / default 及任何其他 profile）：控制台 INFO 彩色，
+                           并且把本模块包（top.zsj.logging）调到 DEBUG 便于排查
+        切换方式（application.yml 里默认 dev）：
+          · 启动参数追加 spring.profiles.active=prod（命令行前缀是两个短横线）
+          · IDEA 里：Run Configuration -> Active profiles 填 prod
+    -->
+    <springProfile name="prod">
+        <root level="WARN">
+            <appender-ref ref="FILE"/>
+        </root>
+    </springProfile>
+
+    <springProfile name="!prod">
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+        <!-- 只针对本模块的包放开 DEBUG，不影响框架自身的 INFO 输出 -->
+        <logger name="top.zsj.logging" level="DEBUG"/>
+    </springProfile>
+
+</configuration>
