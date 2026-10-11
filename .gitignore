@@ -1,5 +1,8 @@
 HELP.md
 target/
+# 运行时产生的日志目录（03-logging 的 logs/ 等）
+logs/
+*.log
 .mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
