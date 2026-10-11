@@ -1,4 +1,4 @@
-package top.zsj.web.interceptor;
+package top.zsj.web.common;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;

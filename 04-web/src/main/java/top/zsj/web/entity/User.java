@@ -1,23 +1,26 @@
 package top.zsj.web.entity;
 
-import lombok.AllArgsConstructor;
 import lombok.Data;
-import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
 
 /**
  * 用户实体
+ * <p>
+ * 实体对内（对应数据库表字段），DTO 对外（接口入参）。
+ * id、birthday、address 由后端生成/补充，前端不用传也传不进来。
  *
  * @author zsj
  * @date 2026/9/23
- * @description 演示 Jackson 自动把对象序列化成 JSON
+ * @description 用户实体
  */
 @Data
-@NoArgsConstructor
-@AllArgsConstructor
-public class User implements Serializable0 {
-}
+public class User {
 
-interface Serializable0 {
+    private Long id;
+    private String username;
+    private Integer age;
+    private String email;
+    private LocalDate birthday;
+    private String address;
 }

@@ -5,12 +5,21 @@ spring:
   application:
     name: 04-web
 
+  output:
+    ansi:
+      # 强制输出 ANSI 颜色（重定向到文件 / 管道时也保留）。
+      # 必须留在 application.yml：logback 只读得到 logback.* 属性，
+      # 读不到 spring.*，搬进 logback-spring.xml 会失效。
+      enabled: always
+
   # Jackson 序列化配置
   jackson:
-    # 全局日期格式：LocalDate / LocalDateTime 都按这个格式输出
+    # 注意：date-format 只对 java.util.Date 生效。
+    # LocalDate / LocalDateTime 由 Jackson 的 JSR310 模块按 ISO 输出（实测 2005-12-24），
+    # 想改它们的格式要在字段上加 @JsonFormat(pattern = "...")。
     date-format: yyyy-MM-dd HH:mm:ss
     time-zone: Asia/Shanghai
-    # 序列化时忽略值为 null 的字段（前端拿到的 JSON 更干净）
+    # 序列化时忽略值为 null 的字段（前端拿到的 JSON 更干净，但要看清楚缺了哪个字段）
     default-property-inclusion: non_null
 
   # 请求体过大/表单限制（演示用，实际按需调整）
@@ -19,8 +28,7 @@ spring:
       max-file-size: 10MB
       max-request-size: 100MB
 
-# 日志：把自己写的包调到 DEBUG，方便观察参数绑定过程
-logging:
-  level:
-    top.zsj.web: debug
-    org.springframework.web: info
+# 日志的格式、级别、输出目的地全部在 logback-spring.xml 里，
+# 这里故意不再写 logging.*：
+#   · 一旦存在 logback-spring.xml，日志行为就以它为准；
+#   · 两处都配容易互相覆盖，排查问题时不知道到底哪份生效。

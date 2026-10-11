@@ -3,6 +3,7 @@ package top.zsj.web.controller;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.validation.constraints.Min;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.CookieValue;
@@ -12,7 +13,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import top.zsj.web.common.R;
+import top.zsj.web.common.Result;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -39,8 +40,25 @@ public class ParamController {
      * 被全局异常处理器接住。
      */
     @GetMapping("/required")
-    public R<String> required(@RequestParam String name) {
-        return R.ok("name = " + name);
+    public Result<String> required(@RequestParam String name) {
+        return Result.ok("name = " + name);
+    }
+
+    /**
+     * 方法参数上的约束校验：GET /param/validated?pageNum=0
+     * <p>
+     * 参数上写 @Min，校验失败抛 HandlerMethodValidationException
+     * （Spring 6.1+ 的新异常，详见全局异常处理器）。
+     * <p>
+     * 注意这个类上故意「不加」@Validated：一旦类上标了 @Validated，
+     * Spring 会改用 AOP 方式做方法校验，抛出的异常会变成
+     * jakarta.validation.ConstraintViolationException，
+     * 和内建校验的异常类型不一样，全局处理器要是不兼容就会直接变成 500。
+     */
+    @GetMapping("/validated")
+    public Result<String> validated(
+            @RequestParam(defaultValue = "1") @Min(value = 1, message = "页码不能小于 1") Integer pageNum) {
+        return Result.ok("pageNum = " + pageNum);
     }
 
     /**
@@ -50,19 +68,19 @@ public class ParamController {
      * 注意：一旦写了 defaultValue，required 会自动变成 false。
      */
     @GetMapping("/default")
-    public R<String> defaultValue(
-            @RequestParam(required = false, defaultValue = "张三") String name,
+    public Result<String> defaultValue(
+            @RequestParam(required = false, defaultValue = "zhangsan") String name,
             @RequestParam(required = false, defaultValue = "1") Integer page,
             @RequestParam(required = false, defaultValue = "10") Integer size) {
-        return R.ok(String.format("name=%s, page=%d, size=%d", name, page, size));
+        return Result.ok(String.format("name=%s, page=%d, size=%d", name, page, size));
     }
 
     /**
      * 多个同名参数 / 数组：GET /param/array?ids=1&ids=2&ids=3
      */
     @GetMapping("/array")
-    public R<List<Long>> array(@RequestParam List<Long> ids) {
-        return R.ok(ids);
+    public Result<List<Long>> array(@RequestParam List<Long> ids) {
+        return Result.ok(ids);
     }
 
     /**
@@ -71,8 +89,8 @@ public class ParamController {
      * Spring 默认就能把 "1,2,3" 拆成集合，不用自己 split。
      */
     @GetMapping("/list")
-    public R<List<Long>> list(@RequestParam List<Long> ids) {
-        return R.ok(ids);
+    public Result<List<Long>> list(@RequestParam List<Long> ids) {
+        return Result.ok(ids);
     }
 
     /**
@@ -81,8 +99,8 @@ public class ParamController {
      * 适合参数不固定的场景（比如动态筛选条件）。
      */
     @GetMapping("/map")
-    public R<Map<String, String>> map(@RequestParam Map<String, String> params) {
-        return R.ok(params);
+    public Result<Map<String, String>> map(@RequestParam Map<String, String> params) {
+        return Result.ok(params);
     }
 
     /**
@@ -92,8 +110,8 @@ public class ParamController {
      * 不加的话会用默认格式解析，格式不对就 400。
      */
     @GetMapping("/date")
-    public R<LocalDate> date(@DateTimeFormat(pattern = "yyyy-MM-dd") @RequestParam LocalDate date) {
-        return R.ok(date);
+    public Result<LocalDate> date(@DateTimeFormat(pattern = "yyyy-MM-dd") @RequestParam LocalDate date) {
+        return Result.ok(date);
     }
 
     /**
@@ -102,30 +120,30 @@ public class ParamController {
      * curl -H "token: abc123" http://localhost:8004/param/header
      */
     @GetMapping("/header")
-    public R<String> header(
+    public Result<String> header(
             @RequestHeader("User-Agent") String userAgent,
             @RequestHeader(value = "token", required = false, defaultValue = "未携带") String token) {
-        return R.ok(String.format("User-Agent=%s | token=%s", userAgent, token));
+        return Result.ok(String.format("User-Agent=%s | token=%s", userAgent, token));
     }
 
     /**
      * 一次性拿所有请求头
      */
     @GetMapping("/headers")
-    public R<Map<String, String>> headers(@RequestHeader Map<String, String> headers) {
-        return R.ok(headers);
+    public Result<Map<String, String>> headers(@RequestHeader Map<String, String> headers) {
+        return Result.ok(headers);
     }
 
     /**
      * 种一个 Cookie，方便下面测试：GET /param/set-cookie
      */
     @GetMapping("/set-cookie")
-    public R<String> setCookie(HttpServletResponse response) {
+    public Result<String> setCookie(HttpServletResponse response) {
         Cookie cookie = new Cookie("username", "zsj");
         cookie.setPath("/");
         cookie.setMaxAge(60 * 60);
         response.addCookie(cookie);
-        return R.ok("Cookie 已写入：username=zsj，有效期 1 小时");
+        return Result.ok("Cookie 已写入：username=zsj，有效期 1 小时");
     }
 
     /**
@@ -135,8 +153,9 @@ public class ParamController {
      * curl -b "username=zsj" http://localhost:8004/param/cookie
      */
     @GetMapping("/cookie")
-    public R<String> cookie(@CookieValue(value = "username", required = false, defaultValue = "游客") String username) {
-        return R.ok("当前用户：" + username);
+    public Result<String> cookie(
+            @CookieValue(value = "username", required = false, defaultValue = "游客") String username) {
+        return Result.ok("当前用户：" + username);
     }
 
     /**
@@ -146,12 +165,12 @@ public class ParamController {
      * 写在方法参数上，需要拿原始对象时用。
      */
     @GetMapping("/servlet")
-    public R<String> servlet(HttpServletRequest request) {
+    public Result<String> servlet(HttpServletRequest request) {
         String uri = request.getRequestURI();
         String method = request.getMethod();
         String name = request.getParameter("name");
         String ip = request.getRemoteAddr();
-        return R.ok(String.format("uri=%s, method=%s, name=%s, ip=%s", uri, method, name, ip));
+        return Result.ok(String.format("uri=%s, method=%s, name=%s, ip=%s", uri, method, name, ip));
     }
 
     /**
@@ -160,8 +179,8 @@ public class ParamController {
      * curl -X POST -d "name=zsj&age=21" http://localhost:8004/param/form
      */
     @PostMapping("/form")
-    public R<String> form(@RequestParam String name, @RequestParam Integer age) {
+    public Result<String> form(@RequestParam String name, @RequestParam Integer age) {
         log.info("收到表单：name={}, age={}", name, age);
-        return R.ok(String.format("表单接收成功：name=%s, age=%d", name, age));
+        return Result.ok(String.format("表单接收成功：name=%s, age=%d", name, age));
     }
 }

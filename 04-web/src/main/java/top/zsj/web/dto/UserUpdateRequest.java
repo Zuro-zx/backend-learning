@@ -1,33 +1,24 @@
 package top.zsj.web.dto;
 
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 /**
- * 修改用户请求
+ * 更新用户请求（DTO）
  * <p>
- * 与 UserCreateRequest 的唯一区别：多一个必填的 id。
+ * 与 UserCreateRequest 的区别：id 放在路径上（PUT /users/{id}），
+ * body 里只收本次允许修改的字段（用户名、邮箱），
+ * 不存在「传完整实体」的必要 —— 想改什么就暴露什么。
  *
  * @author zsj
  * @date 2026/9/23
- * @description 修改用户入参
+ * @description 更新用户请求
  */
 @Data
 public class UserUpdateRequest {
 
-    @NotNull(message = "修改时 id 不能为空")
-    private Long id;
-
     @NotBlank(message = "用户名不能为空")
     private String username;
-
-    @NotNull(message = "年龄不能为空")
-    @Min(value = 1, message = "年龄不能小于 1")
-    @Max(value = 150, message = "年龄不能大于 150")
-    private Integer age;
 
     @NotBlank(message = "邮箱不能为空")
     private String email;
