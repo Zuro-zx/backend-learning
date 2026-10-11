@@ -1,11 +1,54 @@
+# ==========================================================
+# 主配置文件：所有环境共享的通用配置
+# 环境差异配置放在 application-{profile}.yml 中
+# ==========================================================
 server:
-  port: 9090
+  port: 8002
 
 spring:
   application:
     name: 配置管理
+  # 激活的环境（dev / prod），可通过命令行参数 --spring.profiles.active=prod 覆盖
+  profiles:
+    active: dev
 
-mqxu:
-  name: 张世杰
-  job: 学生
+# 基础自定义配置：@Value 直接注入
+zsj:
+  name: 张三
+  job: Java 开发工程师
 
+student:
+  # 注意：name/age 必须合法，否则属性类上的 @Validated 校验
+  # 会在启动时直接报错阻止启动（可改成 "" 或 -1 亲自验证）
+  name: 张三
+  age: 18
+  # 邮箱，用 @Email + @NotBlank 校验
+  email: zhangsan@example.com
+  # 日期属性：用 @NotNull + @Past 校验（必须是过去的日期）
+  birthday: 2008-08-08
+  hobbies:
+    - 篮球
+    - 编程
+    - 阅读
+  scores:
+    chinese: 90
+    math: 95
+    english: 88
+  address:
+    province: 江苏省
+    city: 南京市
+  courses:
+    - name: 高等数学
+      credit: 4
+    - name: 大学英语
+      credit: 3
+
+# ========== @ConfigurationProperties + @Validated 配置校验（AppProperties）==========
+app:
+  name: 配置管理模块
+  # 占位符引用：引用上面 zsj.name 的值
+  author: ${zsj.name}
+  # 保留练习二的默认值演示：不配置 remark 时 @Value 取“暂无备注”
+  # remark: 这是自定义备注
+  port: 8002
+  max-count: 100

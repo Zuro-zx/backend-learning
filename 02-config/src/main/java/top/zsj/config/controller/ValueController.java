@@ -1,9 +1,9 @@
-package top.mqxu.config.controller;
+package top.zsj.config.controller;
 
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import top.mqxu.config.service.ValueService;
+import top.zsj.config.service.ValueService;
 
 import java.util.Map;
 

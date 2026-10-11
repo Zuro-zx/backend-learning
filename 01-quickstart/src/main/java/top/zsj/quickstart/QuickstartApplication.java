@@ -1,4 +1,4 @@
-package top.mqxu.quickstart;
+package top.zsj.quickstart;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;

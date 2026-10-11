@@ -1,8 +1,15 @@
-package top.mqxu.config.properties;
+package top.zsj.config.properties;
 
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Past;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
+import org.springframework.validation.annotation.Validated;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
@@ -20,14 +27,27 @@ import java.util.Map;
  * @description student 前缀配置的绑定对象
  */
 @Component
+@Validated
 @ConfigurationProperties(prefix = "student")
 public class StudentProperties {
 
     /** 简单字段：student.name */
+    @NotBlank(message = "学生姓名name不能为空")
     private String name;
 
     /** 简单字段：student.age */
+    @Min(value = 1, message = "年龄age必须≥1")
     private Integer age;
+
+    /** 邮箱字段：student.email，不能为空且必须符合邮箱格式 */
+    @NotBlank(message = "邮箱email不能为空")
+    @Email(message = "邮箱email格式不合法")
+    private String email;
+
+    /** 日期字段：student.birthday，不能为空且必须是过去的日期 */
+    @NotNull(message = "生日birthday不能为空")
+    @Past(message = "生日birthday必须是过去的日期")
+    private LocalDate birthday;
 
     /** List：student.hobbies */
     private List<String> hobbies;
@@ -55,6 +75,22 @@ public class StudentProperties {
 
     public void setAge(Integer age) {
         this.age = age;
+    }
+
+    public String getEmail() {
+        return email;
+    }
+
+    public void setEmail(String email) {
+        this.email = email;
+    }
+
+    public LocalDate getBirthday() {
+        return birthday;
+    }
+
+    public void setBirthday(LocalDate birthday) {
+        this.birthday = birthday;
     }
 
     public List<String> getHobbies() {
@@ -94,6 +130,8 @@ public class StudentProperties {
         return "StudentProperties{" +
                 "name='" + name + '\'' +
                 ", age=" + age +
+                ", email='" + email + '\'' +
+                ", birthday=" + birthday +
                 ", hobbies=" + hobbies +
                 ", scores=" + scores +
                 ", address=" + address +

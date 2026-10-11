@@ -1,4 +1,4 @@
-package top.mqxu.config.service;
+package top.zsj.config.service;
 
 /**
  * 环境信息服务，用于演示 {@code @Profile} 注解

@@ -1,4 +1,4 @@
-package top.mqxu.config;
+package top.zsj.config;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;

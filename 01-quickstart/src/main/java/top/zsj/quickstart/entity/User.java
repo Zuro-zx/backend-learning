@@ -1,4 +1,4 @@
-package top.mqxu.quickstart.entity;
+package top.zsj.quickstart.entity;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;

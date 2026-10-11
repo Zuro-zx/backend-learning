@@ -1,4 +1,4 @@
-package top.mqxu.config.service;
+package top.zsj.config.service;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;

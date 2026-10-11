@@ -1,9 +1,9 @@
-package top.mqxu.quickstart.controller;
+package top.zsj.quickstart.controller;
 
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import top.mqxu.quickstart.entity.User;
+import top.zsj.quickstart.entity.User;
 
 import java.time.LocalDate;
 import java.time.Month;

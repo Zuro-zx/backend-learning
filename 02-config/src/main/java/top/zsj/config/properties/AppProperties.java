@@ -1,4 +1,4 @@
-package top.mqxu.config.properties;
+package top.zsj.config.properties;
 
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -28,7 +28,7 @@ public class AppProperties {
     @NotBlank(message = "应用名称 app.name 不能为空")
     private String name;
 
-    /** 占位符引用，将 app.author = ${mqxu.name} */
+    /** 占位符引用，将 app.author = ${zsj.name} */
     @NotBlank(message = "应用作者 app.author 不能为空")
     private String author;
 

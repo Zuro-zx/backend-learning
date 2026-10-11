@@ -1,9 +1,9 @@
-package top.mqxu.config.controller;
+package top.zsj.config.controller;
 
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import top.mqxu.config.properties.StudentProperties;
+import top.zsj.config.properties.StudentProperties;
 
 import java.util.HashMap;
 import java.util.List;
@@ -49,6 +49,19 @@ public class StudentController {
         Map<String, Object> result = new HashMap<>();
         result.put("name", studentProperties.getName());
         result.put("age", studentProperties.getAge());
+        return result;
+    }
+
+    /**
+     * 查询新增的邮箱、生日配置（带 @Email/@Past 校验的字段）
+     *
+     * @return 邮箱与生日
+     */
+    @GetMapping("/contact")
+    public Map<String, Object> getContactInfo() {
+        Map<String, Object> result = new HashMap<>();
+        result.put("email", studentProperties.getEmail());
+        result.put("birthday", studentProperties.getBirthday());
         return result;
     }
 
