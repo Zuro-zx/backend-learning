@@ -116,6 +116,11 @@ public class UserController {
         return userService.modifyUserStatus(id, status);
     }
 
+    @PutMapping("/email")
+    public boolean updateEmail(@RequestParam String username, @RequestParam String email) {
+        return userService.modifyEmailByUsername(username, email);
+    }
+
     @PostMapping("/{id}/recharge")
     public User recharge(@PathVariable Long id, @RequestParam BigDecimal amount) {
         userService.recharge(id, amount);

@@ -4,9 +4,13 @@ spring:
     url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1
     username: sa
     password:
+  # 测试库显式指定 H2 版脚本，避免与主资源下的 MySQL 脚本混用
   sql:
     init:
-      mode: embedded   # 内嵌库默认自动执行 schema.sql，此处显式声明
+      mode: embedded   # 内嵌库默认自动执行，此处显式声明
+      schema-locations: classpath:schema-h2.sql
+      data-locations: classpath:data-h2.sql
+      encoding: UTF-8
 
 mybatis-plus:
   configuration:

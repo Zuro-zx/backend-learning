@@ -1,0 +1,874 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "backend-learning",
+    "description": "Spring Boot + MyBatis-Plus single-table CRUD demo (module 05-mybatis), based on UserController.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8005",
+      "description": "Local dev server"
+    }
+  ],
+  "tags": [
+    { "name": "User API", "description": "t_user CRUD endpoints (20 total)" },
+    { "name": "Course API", "description": "t_course endpoints practicing saveBatch / removeByIds" },
+    { "name": "Order API", "description": "t_order endpoints demonstrating order+stock transactional atomicity" },
+    { "name": "Pool Lab", "description": "Connection pool experiment endpoints (HikariCP)" }
+  ],
+  "paths": {
+    "/users": {
+      "post": {
+        "tags": ["User API"],
+        "summary": "create",
+        "operationId": "create",
+        "description": "Create a user. Transactional: age=200 (or negative) throws an exception and rolls back, returning 500 with no row inserted (exercise 3). password defaults to SHA-256 of '123456' when omitted.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UserCreate" },
+              "examples": {
+                "normalCreate": { "value": { "username": "zhouba", "age": 28, "tags": ["Java"] } },
+                "transactionRollback": { "value": { "username": "x", "age": 200 } }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Created user with id, createTime and version=0; password never appears in the response",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/User" } } }
+          },
+          "500": { "description": "Age out of range, transaction rolled back" }
+        }
+      },
+      "get": {
+        "tags": ["User API"],
+        "summary": "list",
+        "operationId": "list",
+        "description": "Conditional list query. Every condition is optional; when all are empty it returns all non-deleted users, ordered by id descending.",
+        "parameters": [
+          { "$ref": "#/components/parameters/keyword" },
+          { "$ref": "#/components/parameters/gender" },
+          { "$ref": "#/components/parameters/memberLevel" },
+          { "$ref": "#/components/parameters/vip" },
+          { "$ref": "#/components/parameters/status" },
+          { "$ref": "#/components/parameters/minAge" },
+          { "$ref": "#/components/parameters/maxAge" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Matching users",
+            "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/User" } } } }
+          }
+        }
+      }
+    },
+    "/users/batch": {
+      "post": {
+        "tags": ["User API"],
+        "summary": "createBatch",
+        "operationId": "createBatch",
+        "description": "Batch create users, returns the number of created rows.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "type": "array", "items": { "$ref": "#/components/schemas/UserCreate" } },
+              "example": [
+                { "username": "user01", "age": 20 },
+                { "username": "user02", "age": 22, "vip": true }
+              ]
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Number of created rows",
+            "content": { "application/json": { "schema": { "type": "integer", "example": 2 } } }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["User API"],
+        "summary": "deleteBatch",
+        "operationId": "deleteBatch",
+        "description": "Batch logical delete: actually executes UPDATE t_user SET deleted=1 WHERE id IN (...) AND deleted=0",
+        "parameters": [
+          {
+            "name": "ids",
+            "in": "query",
+            "required": true,
+            "description": "Primary key list, comma separated, e.g. 8,9",
+            "schema": { "type": "array", "items": { "type": "integer", "format": "int64" } },
+            "example": [8, 9]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success flag",
+            "content": { "application/json": { "schema": { "type": "boolean" } } }
+          }
+        }
+      }
+    },
+    "/users/{id}": {
+      "get": {
+        "tags": ["User API"],
+        "summary": "getById",
+        "operationId": "getById",
+        "description": "Get user by primary key. Returns null for a non-existent id without error (exercise 1); returns null after logical delete while the row stays in the table with deleted=1 (exercise 4).",
+        "parameters": [{ "$ref": "#/components/parameters/id" }],
+        "responses": {
+          "200": {
+            "description": "User detail, null when not found",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/User", "nullable": true } } }
+          }
+        }
+      },
+      "put": {
+        "tags": ["User API"],
+        "summary": "update",
+        "operationId": "update",
+        "description": "Update user by primary key, only non-null fields are updated. With version carried in the entity the optimistic lock applies: calling update twice with the same entity makes the second call return false (exercise 5).",
+        "parameters": [{ "$ref": "#/components/parameters/id" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UserUpdate" },
+              "examples": {
+                "normalUpdate": { "value": { "nickname": "renamed", "age": 21 } },
+                "optimisticLockDemo": {
+                  "description": "GET the entity first (with version), PUT it twice; the second PUT fails",
+                  "value": { "nickname": "first change", "version": 0 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated user with refreshed updateTime",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/User" } } }
+          },
+          "500": { "description": "User not found or optimistic lock conflict" }
+        }
+      },
+      "delete": {
+        "tags": ["User API"],
+        "summary": "delete",
+        "operationId": "delete",
+        "description": "Logical delete: actually executes UPDATE t_user SET update_time=?, deleted=1 WHERE id=? AND deleted=0. A follow-up getById returns null while the row remains with deleted=1.",
+        "parameters": [{ "$ref": "#/components/parameters/id" }],
+        "responses": {
+          "200": {
+            "description": "Success flag",
+            "content": { "application/json": { "schema": { "type": "boolean" } } }
+          }
+        }
+      }
+    },
+    "/users/page": {
+      "get": {
+        "tags": ["User API"],
+        "summary": "page",
+        "operationId": "page",
+        "description": "Conditional paged query, returns records/total/current/pages.",
+        "parameters": [
+          { "$ref": "#/components/parameters/keyword" },
+          { "$ref": "#/components/parameters/gender" },
+          { "$ref": "#/components/parameters/memberLevel" },
+          { "$ref": "#/components/parameters/vip" },
+          { "$ref": "#/components/parameters/status" },
+          { "$ref": "#/components/parameters/minAge" },
+          { "$ref": "#/components/parameters/maxAge" },
+          { "$ref": "#/components/parameters/current" },
+          { "$ref": "#/components/parameters/size" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paged result",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PageUser" } } }
+          }
+        }
+      }
+    },
+    "/users/keyword": {
+      "get": {
+        "tags": ["User API"],
+        "summary": "keyword",
+        "operationId": "keyword",
+        "description": "Fuzzy search by keyword on username and nickname (LIKE), OR conditions wrapped in parentheses.",
+        "parameters": [
+          {
+            "name": "keyword",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string" },
+            "example": "zhang"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Matching users",
+            "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/User" } } } }
+          }
+        }
+      }
+    },
+    "/users/age-range": {
+      "get": {
+        "tags": ["User API"],
+        "summary": "ageRange",
+        "operationId": "ageRange",
+        "description": "Query users by age range, sorted by age ascending.",
+        "parameters": [
+          { "$ref": "#/components/parameters/minAge" },
+          { "$ref": "#/components/parameters/maxAge" }
+        ],
+        "responses": {
+          "200": {
+            "description": "User list",
+            "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/User" } } } }
+          }
+        }
+      }
+    },
+    "/users/top": {
+      "get": {
+        "tags": ["User API"],
+        "summary": "top",
+        "operationId": "top",
+        "description": "Top N users ordered by points descending; limit defaults to 3, max 50.",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "default": 3, "maximum": 50 },
+            "example": 2
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User list",
+            "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/User" } } } }
+          }
+        }
+      }
+    },
+    "/users/usernames": {
+      "get": {
+        "tags": ["User API"],
+        "summary": "usernames",
+        "operationId": "usernames",
+        "description": "Select only the username column, returns a string array.",
+        "responses": {
+          "200": {
+            "description": "Username array",
+            "content": { "application/json": { "schema": { "type": "array", "items": { "type": "string" } } } }
+          }
+        }
+      }
+    },
+    "/users/tag": {
+      "get": {
+        "tags": ["User API"],
+        "summary": "byTag",
+        "operationId": "byTag",
+        "description": "Query by JSON tag: JSON_CONTAINS(tags, JSON_QUOTE(?)), returns users whose tags contain the given value.",
+        "parameters": [
+          {
+            "name": "tag",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string" },
+            "example": "Java"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Matching users",
+            "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/User" } } } }
+          }
+        }
+      }
+    },
+    "/users/exists": {
+      "get": {
+        "tags": ["User API"],
+        "summary": "exists",
+        "operationId": "exists",
+        "description": "Check whether a username exists, returns true / false.",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string" },
+            "example": "admin"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Existence flag",
+            "content": { "application/json": { "schema": { "type": "boolean" } } }
+          }
+        }
+      }
+    },
+    "/users/count": {
+      "get": {
+        "tags": ["User API"],
+        "summary": "count",
+        "operationId": "count",
+        "description": "Count users, optionally filtered by gender.",
+        "parameters": [{ "$ref": "#/components/parameters/gender" }],
+        "responses": {
+          "200": {
+            "description": "Count",
+            "content": { "application/json": { "schema": { "type": "integer", "format": "int64" } } }
+          }
+        }
+      }
+    },
+    "/users/statistics": {
+      "get": {
+        "tags": ["User API"],
+        "summary": "statistics",
+        "operationId": "statistics",
+        "description": "Aggregate statistics: totalCount / totalBalance / maxAge / genderCount (grouped by gender).",
+        "responses": {
+          "200": {
+            "description": "Statistics result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "totalCount": { "type": "integer" },
+                    "totalBalance": { "type": "number" },
+                    "maxAge": { "type": "integer" },
+                    "genderCount": { "type": "array", "items": { "type": "object", "additionalProperties": true } }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/{id}/status": {
+      "put": {
+        "tags": ["User API"],
+        "summary": "updateStatus",
+        "operationId": "updateStatus",
+        "description": "Update status by primary key via LambdaUpdateWrapper: 1 normal / 0 disabled.",
+        "parameters": [
+          { "$ref": "#/components/parameters/id" },
+          {
+            "name": "status",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "integer", "enum": [0, 1] },
+            "example": 0
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success flag",
+            "content": { "application/json": { "schema": { "type": "boolean" } } }
+          }
+        }
+      }
+    },
+    "/users/{id}/recharge": {
+      "post": {
+        "tags": ["User API"],
+        "summary": "recharge",
+        "operationId": "recharge",
+        "description": "Recharge the account balance. The entity carries version, so the optimistic lock applies and version increments. amount must be > 0.",
+        "parameters": [
+          { "$ref": "#/components/parameters/id" },
+          {
+            "name": "amount",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "number", "minimum": 0.01 },
+            "example": 100.25
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User after recharge, balance increased and version incremented",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/User" } } }
+          },
+          "500": { "description": "User not found or invalid amount" }
+        }
+      }
+    },
+    "/users/status/{status}": {
+      "delete": {
+        "tags": ["User API"],
+        "summary": "deleteByStatus",
+        "operationId": "deleteByStatus",
+        "description": "Conditional logical delete by status (remove + Wrapper).",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" },
+            "example": 0
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success flag",
+            "content": { "application/json": { "schema": { "type": "boolean" } } }
+          }
+        }
+      }
+    },
+    "/users/email": {
+      "put": {
+        "tags": ["User API"],
+        "summary": "updateEmail",
+        "operationId": "updateEmail",
+        "description": "Update email by username via LambdaUpdateWrapper: UPDATE t_user SET email=? WHERE username=? AND deleted=0. Returns false when the username does not exist.",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string" },
+            "example": "zhangsan"
+          },
+          {
+            "name": "email",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string" },
+            "example": "zsj-new@example.com"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success flag, false when username not found",
+            "content": { "application/json": { "schema": { "type": "boolean" } } }
+          }
+        }
+      }
+    },
+    "/courses": {
+      "post": {
+        "tags": ["Course API"],
+        "summary": "createCourse",
+        "operationId": "createCourse",
+        "description": "Create a single course.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CourseCreate" },
+              "example": { "name": "Spring Boot 实战", "teacher": "zsj", "credit": 3.0 }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Created course with id and auto-filled createTime/updateTime",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Course" } } }
+          }
+        }
+      },
+      "get": {
+        "tags": ["Course API"],
+        "summary": "listCourses",
+        "operationId": "listCourses",
+        "description": "List all non-deleted courses ordered by id.",
+        "responses": {
+          "200": {
+            "description": "Course list",
+            "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Course" } } } }
+          }
+        }
+      }
+    },
+    "/courses/batch": {
+      "post": {
+        "tags": ["Course API"],
+        "summary": "createCourseBatch",
+        "operationId": "createCourseBatch",
+        "description": "Batch create courses via saveBatch(users, 100): JDBC batch submit in chunks of 100, all rows in one transaction.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "type": "array", "items": { "$ref": "#/components/schemas/CourseCreate" } },
+              "example": [
+                { "name": "Docker 容器化", "teacher": "zhouba", "credit": 2.5 },
+                { "name": "Kubernetes 部署", "teacher": "zhoujiu", "credit": 1.5 }
+              ]
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Number of created rows",
+            "content": { "application/json": { "schema": { "type": "integer", "example": 2 } } }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Course API"],
+        "summary": "deleteCourseBatch",
+        "operationId": "deleteCourseBatch",
+        "description": "Batch delete via removeByIds: the entity carries @TableLogic so it executes UPDATE t_course SET deleted=1 WHERE id IN (...).",
+        "parameters": [
+          {
+            "name": "ids",
+            "in": "query",
+            "required": true,
+            "description": "Primary key list, comma separated, e.g. 5,6",
+            "schema": { "type": "array", "items": { "type": "integer", "format": "int64" } },
+            "example": [5, 6]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success flag",
+            "content": { "application/json": { "schema": { "type": "boolean" } } }
+          }
+        }
+      }
+    },
+    "/courses/{id}": {
+      "get": {
+        "tags": ["Course API"],
+        "summary": "getCourseById",
+        "operationId": "getCourseById",
+        "description": "Get course by primary key, returns null after logical delete.",
+        "parameters": [{ "$ref": "#/components/parameters/id" }],
+        "responses": {
+          "200": {
+            "description": "Course detail, null when not found",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Course", "nullable": true } } }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Course API"],
+        "summary": "deleteCourse",
+        "operationId": "deleteCourse",
+        "description": "Logical delete a single course.",
+        "parameters": [{ "$ref": "#/components/parameters/id" }],
+        "responses": {
+          "200": {
+            "description": "Success flag",
+            "content": { "application/json": { "schema": { "type": "boolean" } } }
+          }
+        }
+      }
+    },
+    "/orders": {
+      "post": {
+        "tags": ["Order API"],
+        "summary": "createOrder",
+        "operationId": "createOrder",
+        "description": "Create order + deduct stock inside one @Transactional method. Deduction uses UPDATE t_product SET stock = stock - ? WHERE id=? AND stock >= ?; when 0 rows are affected (insufficient stock) or simulateError=true, the whole transaction rolls back and neither row changes.",
+        "parameters": [
+          { "name": "userId", "in": "query", "required": false, "schema": { "type": "integer", "format": "int64" }, "example": 1 },
+          { "name": "productId", "in": "query", "required": true, "schema": { "type": "integer", "format": "int64" }, "example": 1 },
+          { "name": "quantity", "in": "query", "required": true, "schema": { "type": "integer", "minimum": 1 }, "example": 2 },
+          { "name": "simulateError", "in": "query", "required": false, "schema": { "type": "boolean", "default": false }, "description": "Throw after both writes to prove rollback atomicity" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Created order with generated orderNo, amount = price * quantity",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Order" } } }
+          },
+          "500": {
+            "description": "simulateError=true or insufficient stock; order insert and stock deduction both rolled back"
+          }
+        }
+      },
+      "get": {
+        "tags": ["Order API"],
+        "summary": "listOrders",
+        "operationId": "listOrders",
+        "description": "List orders, optionally filtered by userId, ordered by id descending.",
+        "parameters": [
+          { "name": "userId", "in": "query", "required": false, "schema": { "type": "integer", "format": "int64" }, "example": 1 }
+        ],
+        "responses": {
+          "200": {
+            "description": "Order list",
+            "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Order" } } } }
+          }
+        }
+      }
+    },
+    "/orders/{id}": {
+      "get": {
+        "tags": ["Order API"],
+        "summary": "getOrderById",
+        "operationId": "getOrderById",
+        "description": "Get order by primary key, returns null after logical delete.",
+        "parameters": [{ "$ref": "#/components/parameters/id" }],
+        "responses": {
+          "200": {
+            "description": "Order detail, null when not found",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Order", "nullable": true } } }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Order API"],
+        "summary": "deleteOrder",
+        "operationId": "deleteOrder",
+        "description": "Logical delete: UPDATE t_order SET update_time=?, deleted=1 WHERE id=? AND deleted=0.",
+        "parameters": [{ "$ref": "#/components/parameters/id" }],
+        "responses": {
+          "200": {
+            "description": "Success flag",
+            "content": { "application/json": { "schema": { "type": "boolean" } } }
+          }
+        }
+      }
+    },
+    "/pool/sleep": {
+      "get": {
+        "tags": ["Pool Lab"],
+        "summary": "sleep",
+        "operationId": "poolSleep",
+        "description": "Experiment-only endpoint: SELECT SLEEP(?) holds one pooled connection for N seconds. With maximum-pool-size=1 and 6 concurrent requests it reproduces 'Connection is not available, request timed out after 3000ms'.",
+        "parameters": [
+          { "name": "seconds", "in": "query", "required": false, "schema": { "type": "integer", "default": 2, "minimum": 1, "maximum": 10 } }
+        ],
+        "responses": {
+          "200": { "description": "Millis the connection was held" },
+          "500": { "description": "Pool exhausted: CannotGetJdbcConnectionException / Connection is not available" }
+        }
+      }
+    },
+    "/pool/stats": {
+      "get": {
+        "tags": ["Pool Lab"],
+        "summary": "stats",
+        "operationId": "poolStats",
+        "description": "HikariCP pool metrics (the Hikari counterpart of the course's Druid monitoring page): active / idle / total connections and threads waiting for a connection.",
+        "responses": {
+          "200": {
+            "description": "Pool stats",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PoolStats" } } }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "id": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "description": "User primary key",
+        "schema": { "type": "integer", "format": "int64" },
+        "example": 1
+      },
+      "keyword": {
+        "name": "keyword",
+        "in": "query",
+        "required": false,
+        "description": "Matches username or nickname",
+        "schema": { "type": "string" }
+      },
+      "gender": {
+        "name": "gender",
+        "in": "query",
+        "required": false,
+        "description": "Gender: 0 unset / 1 male / 2 female",
+        "schema": { "type": "integer", "enum": [0, 1, 2] }
+      },
+      "memberLevel": {
+        "name": "memberLevel",
+        "in": "query",
+        "required": false,
+        "schema": { "type": "string", "enum": ["BRONZE", "SILVER", "GOLD"] }
+      },
+      "vip": {
+        "name": "vip",
+        "in": "query",
+        "required": false,
+        "schema": { "type": "boolean" }
+      },
+      "status": {
+        "name": "status",
+        "in": "query",
+        "required": false,
+        "description": "Status: 1 normal / 0 disabled",
+        "schema": { "type": "integer", "enum": [0, 1] }
+      },
+      "minAge": {
+        "name": "minAge",
+        "in": "query",
+        "required": false,
+        "schema": { "type": "integer" },
+        "example": 20
+      },
+      "maxAge": {
+        "name": "maxAge",
+        "in": "query",
+        "required": false,
+        "schema": { "type": "integer" },
+        "example": 30
+      },
+      "current": {
+        "name": "current",
+        "in": "query",
+        "required": false,
+        "description": "Page number, starting from 1",
+        "schema": { "type": "integer", "default": 1 },
+        "example": 1
+      },
+      "size": {
+        "name": "size",
+        "in": "query",
+        "required": false,
+        "description": "Page size",
+        "schema": { "type": "integer", "default": 10 },
+        "example": 3
+      }
+    },
+    "schemas": {
+      "UserCreate": {
+        "type": "object",
+        "required": ["username"],
+        "properties": {
+          "username": { "type": "string", "maxLength": 50, "description": "Login name, unique" },
+          "password": { "type": "string", "writeOnly": true, "description": "Defaults to SHA-256 of '123456' when omitted" },
+          "nickname": { "type": "string", "maxLength": 50 },
+          "gender": { "type": "integer", "enum": [0, 1, 2], "description": "0 unset / 1 male / 2 female, default 0" },
+          "age": { "type": "integer", "minimum": 0, "maximum": 150, "description": "Out of 0~150 triggers rollback with 500" },
+          "memberLevel": { "type": "string", "enum": ["BRONZE", "SILVER", "GOLD"], "default": "BRONZE" },
+          "points": { "type": "integer", "default": 0 },
+          "balance": { "type": "number", "default": 0 },
+          "score": { "type": "number", "format": "float" },
+          "phone": { "type": "string" },
+          "email": { "type": "string" },
+          "avatar": { "type": "string" },
+          "intro": { "type": "string" },
+          "tags": { "type": "array", "items": { "type": "string" }, "description": "JSON column, e.g. [\"Java\",\"basketball\"]" },
+          "birthday": { "type": "string", "format": "date", "example": "2000-01-01" },
+          "workTime": { "type": "string", "pattern": "^\\d{2}:\\d{2}:\\d{2}$", "example": "09:00:00" },
+          "vip": { "type": "boolean", "default": false },
+          "status": { "type": "integer", "enum": [0, 1], "default": 1 }
+        }
+      },
+      "UserUpdate": {
+        "type": "object",
+        "description": "Update by primary key, only non-null fields; optimistic lock applies when version is carried",
+        "properties": {
+          "nickname": { "type": "string" },
+          "age": { "type": "integer" },
+          "phone": { "type": "string" },
+          "email": { "type": "string" },
+          "intro": { "type": "string" },
+          "tags": { "type": "array", "items": { "type": "string" } },
+          "vip": { "type": "boolean" },
+          "status": { "type": "integer", "enum": [0, 1] },
+          "version": { "type": "integer", "description": "Optimistic lock version; when present the UPDATE appends AND version=? and increments it" }
+        }
+      },
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "format": "int64" },
+          "username": { "type": "string" },
+          "nickname": { "type": "string" },
+          "gender": { "type": "integer" },
+          "age": { "type": "integer" },
+          "memberLevel": { "type": "string", "enum": ["BRONZE", "SILVER", "GOLD"] },
+          "points": { "type": "integer" },
+          "balance": { "type": "number" },
+          "score": { "type": "number", "format": "float" },
+          "phone": { "type": "string" },
+          "email": { "type": "string" },
+          "avatar": { "type": "string" },
+          "intro": { "type": "string" },
+          "tags": { "type": "array", "items": { "type": "string" } },
+          "birthday": { "type": "string", "format": "date" },
+          "workTime": { "type": "string", "example": "09:00:00" },
+          "vip": { "type": "boolean" },
+          "status": { "type": "integer" },
+          "lastLoginTime": { "type": "string", "example": "2026-10-10 12:00:00" },
+          "createTime": { "type": "string", "example": "2026-10-10 12:00:00" },
+          "updateTime": { "type": "string", "example": "2026-10-10 12:00:00" },
+          "deleted": { "type": "integer", "description": "Logical delete flag: 0 active / 1 deleted" },
+          "version": { "type": "integer", "description": "Optimistic lock version" }
+        },
+        "description": "password is WRITE_ONLY and never appears in responses"
+      },
+      "PageUser": {
+        "type": "object",
+        "properties": {
+          "records": { "type": "array", "items": { "$ref": "#/components/schemas/User" } },
+          "total": { "type": "integer", "format": "int64" },
+          "current": { "type": "integer", "format": "int64" },
+          "pages": { "type": "integer", "format": "int64" },
+          "size": { "type": "integer", "format": "int64" }
+        }
+      },
+      "CourseCreate": {
+        "type": "object",
+        "required": ["name", "teacher", "credit"],
+        "properties": {
+          "name": { "type": "string", "maxLength": 100 },
+          "teacher": { "type": "string", "maxLength": 50 },
+          "credit": { "type": "number", "description": "DECIMAL(3,1), e.g. 2.5 credits" }
+        }
+      },
+      "Course": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "format": "int64" },
+          "name": { "type": "string" },
+          "teacher": { "type": "string" },
+          "credit": { "type": "number" },
+          "createTime": { "type": "string", "example": "2026-10-01 08:00:00" },
+          "updateTime": { "type": "string", "example": "2026-10-01 08:00:00" },
+          "deleted": { "type": "integer", "description": "Logical delete flag: 0 active / 1 deleted" }
+        }
+      },
+      "Order": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "format": "int64" },
+          "orderNo": { "type": "string", "example": "20261011201703634499" },
+          "userId": { "type": "integer", "format": "int64", "nullable": true },
+          "productId": { "type": "integer", "format": "int64" },
+          "quantity": { "type": "integer" },
+          "amount": { "type": "number", "description": "price * quantity" },
+          "createTime": { "type": "string", "example": "2026-10-11 20:17:03" },
+          "updateTime": { "type": "string", "example": "2026-10-11 20:17:03" },
+          "deleted": { "type": "integer", "description": "Logical delete flag: 0 active / 1 deleted" }
+        }
+      },
+      "PoolStats": {
+        "type": "object",
+        "properties": {
+          "poolName": { "type": "string" },
+          "maximumPoolSize": { "type": "integer" },
+          "activeConnections": { "type": "integer" },
+          "idleConnections": { "type": "integer" },
+          "totalConnections": { "type": "integer" },
+          "threadsAwaitingConnection": { "type": "integer" }
+        }
+      }
+    }
+  }
+}

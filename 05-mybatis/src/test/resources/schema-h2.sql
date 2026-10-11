@@ -28,3 +28,43 @@ CREATE TABLE t_user
     deleted         TINYINT      NOT NULL DEFAULT 0,
     version         INT          NOT NULL DEFAULT 0
 );
+
+DROP TABLE IF EXISTS t_course;
+
+CREATE TABLE t_course
+(
+    id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+    name        VARCHAR(100) NOT NULL,
+    teacher     VARCHAR(50)  NOT NULL,
+    credit      DECIMAL(3, 1) NOT NULL,
+    create_time TIMESTAMP    NOT NULL,
+    update_time TIMESTAMP    NOT NULL,
+    deleted     TINYINT      NOT NULL DEFAULT 0
+);
+
+DROP TABLE IF EXISTS t_product;
+
+CREATE TABLE t_product
+(
+    id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+    name        VARCHAR(100) NOT NULL,
+    price       DECIMAL(10, 2) NOT NULL,
+    stock       INT          NOT NULL,
+    create_time TIMESTAMP    NOT NULL,
+    update_time TIMESTAMP    NOT NULL
+);
+
+DROP TABLE IF EXISTS t_order;
+
+CREATE TABLE t_order
+(
+    id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+    order_no    VARCHAR(32)  NOT NULL,
+    user_id     BIGINT,
+    product_id  BIGINT       NOT NULL,
+    quantity    INT          NOT NULL,
+    amount      DECIMAL(12, 2) NOT NULL,
+    create_time TIMESTAMP    NOT NULL,
+    update_time TIMESTAMP    NOT NULL,
+    deleted     TINYINT      NOT NULL DEFAULT 0
+);

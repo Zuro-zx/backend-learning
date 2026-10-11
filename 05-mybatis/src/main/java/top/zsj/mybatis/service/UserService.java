@@ -33,6 +33,8 @@ public interface UserService extends IService<User> {
 
     boolean modifyUserStatus(Long id, Integer status);
 
+    boolean modifyEmailByUsername(String username, String email);
+
     boolean recharge(Long id, BigDecimal amount);
 
     /* 查（基础） */

@@ -24,3 +24,15 @@ VALUES (1, 'zhangsan', '8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c92
        (6, 'deleteduser', '8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92', '已删除用户', 0, NULL,
         'BRONZE', 10, 0.00, 3.0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 1, NULL,
         '2026-10-01 13:00:00', '2026-10-01 13:00:00', 1, 0);
+
+-- 课程示例数据
+INSERT INTO t_course (id, name, teacher, credit, create_time, update_time, deleted)
+VALUES (1, 'Spring Boot 实战', 'zsj', 3.0, '2026-10-01 08:00:00', '2026-10-01 08:00:00', 0),
+       (2, 'MySQL 从入门到调优', 'mali', 2.5, '2026-10-01 09:00:00', '2026-10-01 09:00:00', 0),
+       (3, 'Redis 缓存设计', 'zhaoqiang', 2.0, '2026-10-01 10:00:00', '2026-10-01 10:00:00', 0),
+       (4, 'Java 并发编程', 'sunli', 3.5, '2026-10-01 11:00:00', '2026-10-01 11:00:00', 0);
+
+-- 商品示例数据（库存来源）
+INSERT INTO t_product (id, name, price, stock, create_time, update_time)
+VALUES (1, '机械键盘', 299.00, 100, '2026-10-01 08:00:00', '2026-10-01 08:00:00'),
+       (2, '显示器', 1299.00, 50, '2026-10-01 08:00:00', '2026-10-01 08:00:00');

@@ -98,6 +98,23 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
                 .set(User::getStatus, status));
     }
 
+    /**
+     * 按 username 更新邮箱：只想改一列时不必查出整个实体再 updateById，
+     * 用 LambdaUpdateWrapper 直接拼 UPDATE ... SET email = ? WHERE username = ?
+     */
+    @Override
+    public boolean modifyEmailByUsername(String username, String email) {
+        if (!StringUtils.hasText(username)) {
+            throw new IllegalArgumentException("用户名不能为空");
+        }
+        if (!StringUtils.hasText(email)) {
+            throw new IllegalArgumentException("邮箱不能为空");
+        }
+        return update(new LambdaUpdateWrapper<User>()
+                .eq(User::getUsername, username)
+                .set(User::getEmail, email));
+    }
+
     @Override
     public boolean recharge(Long id, BigDecimal amount) {
         if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
