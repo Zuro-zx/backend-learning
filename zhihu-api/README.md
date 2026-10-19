@@ -63,9 +63,12 @@ GET /api/v1/special/all
 
 两个与教程不同的地方，都是为了不出错：
 
-1. **`id` 序列化成字符串**。19 位数字超出 JS `Number` 的安全整数范围（2^53 ≈ 9.007e15），
-   直接返回数字，前端 `JSON.parse` 后末尾几位会被抹平（`2086116797393257830` → `...257800`）。
-   实体上加了 `@JsonSerialize(using = ToStringSerializer.class)` 解决。
+1. **`id` 用 `String` 承接 BIGINT**。19 位数字超出 JS `Number` 的安全整数范围（2^53 ≈ 9.007e15），
+   用 `Long` 序列化成数字后，前端 `JSON.parse` 会把末尾几位抹平
+   （`2086116797393257830` 变成 `2086116797393257800`）。实体里声明成 `String`，
+   MyBatis 读列时走 `getString`，JSON 直接输出带引号的字符串，前端类型也写成 `string`。
+   （另一种写法是 `Long` + Jackson 的 `ToStringSerializer`，但 Spring Boot 4 用的是 Jackson 3，
+   注解在 `tools.jackson.databind.*` 下，`com.fasterxml.jackson.databind` 已不在类路径上，容易踩空。）
 2. **`updated` 用 `LocalDateTime` + `@JsonFormat`**。教程实体里是 `Long`，那样前端卡片上会显示
    `1790151017` 这种时间戳；改成 DATETIME 后在库里可读、接口直接返回 `2026-09-23 16:10:17`。
 
