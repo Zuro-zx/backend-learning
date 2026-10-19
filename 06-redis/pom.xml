@@ -15,6 +15,51 @@
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <cloopen.version>1.0.4</cloopen.version>
+        <jjwt.version>0.13.0</jjwt.version>
     </properties>
+
+    <dependencies>
+        <!-- Redis 客户端与 Spring Data Redis 抽象，底层默认用 Lettuce -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
+        <!-- Lettuce 的 pool 配置由 commons-pool2 提供，缺了它池参数会静默失效 -->
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-pool2</artifactId>
+        </dependency>
+        <!-- 容联云短信 SDK -->
+        <dependency>
+            <groupId>com.cloopen</groupId>
+            <artifactId>java-sms-sdk</artifactId>
+            <version>${cloopen.version}</version>
+        </dependency>
+        <!-- 接口文档：暴露 /v3/api-docs，供 Apifox「URL 导入」一键同步接口（可选，删掉不影响业务） -->
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+            <version>3.1.1</version>
+        </dependency>
+        <!-- JWT：jjwt 0.12.x 拆成三件套 —— api 编译期可见，impl/jackson 仅运行期需要 -->
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-api</artifactId>
+            <version>${jjwt.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-impl</artifactId>
+            <version>${jjwt.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-jackson</artifactId>
+            <version>${jjwt.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+    </dependencies>
 
 </project>

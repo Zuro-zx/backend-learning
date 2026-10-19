@@ -3,4 +3,56 @@ server:
 
 spring:
   application:
-    name: 06-redis
+    name: 06-redis 缓存模块
+  # 私有配置（含容联云凭证），文件被 .gitignore 忽略；文件不存在时用 optional 保证照常启动
+  config:
+    import: optional:classpath:application-local.yml
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      # 本机 Redis 未设置 requirepass，密码留空（不写该行即可）
+      # 若写了空串反而可能触发 "ERR Client sent AUTH, but no password is set"
+      # password:
+      database: 10   # 这里配置了 DB10，默认为 DB0
+      timeout: 3s
+      # Lettuce 默认多条命令复用同一个连接，池化后按连接池取用
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 2
+          max-wait: 1s
+
+# 容联云短信配置
+# 三个凭证（accountSid / accountToken / appId）是敏感信息，
+# 放在同目录的 application-local.yml（已被 .gitignore 忽略），不写在本文件里
+# accountSid  ：控制台 HOME 页，32 位（老账号可能是 8 位）
+# accountToken：控制台 HOME 页，点「查看」可见
+# appId       ：管理 → 应用管理里默认应用的 APP ID
+# templateId  ：短信模板 ID，测试模板固定为 1（只能发给控制台里绑定的测试号码）
+zsj:
+  sms:
+    # Mock 开关：true 时不调用容联云 SDK，验证码只写日志与 Redis，方便本地调试；
+    # 上线前改成 false，或用环境变量 ZSJ_SMS_MOCK_ENABLED=false 覆盖
+    mock-enabled: true
+    # 验证码有效期（秒）：5 分钟，与前端倒计时一致
+    code-expire-seconds: 300
+    # 同一个手机号两次发送的最小间隔（秒），前端倒计时用同一个数字
+    send-interval-seconds: 60
+    # 同一个手机号一天最多发多少条
+    send-daily-limit: 10
+    # 同一个验证码最多允许输错几次，超过就作废
+    max-fail-count: 5
+    ccpp:
+      serverIp: app.cloopen.com
+      port: 8883
+      templateId: 1
+
+  # JWT 登录态配置
+  jwt:
+    issuer: zsj
+    # HS256 要求至少 32 字节；本地演示写死，生产用环境变量 ZSJ_JWT_SECRET 覆盖
+    secret: zsj-sms-login-demo-secret-key-please-replace-in-production-2026
+    # 登录态有效期（秒）：7200 = 2 小时
+    expire-seconds: 7200
