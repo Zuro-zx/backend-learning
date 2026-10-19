@@ -1,25 +1,46 @@
 -- ============================================================
--- 扩展练习 1：为 t_special 增加分类字段并完成标注
+-- 扩展练习 1：为已有数据库补 category 列并打标（增量脚本）
 -- 执行方式（Windows）：
 --   "C:\Program Files\MySQL\MySQL Server 9.2\bin\mysql.exe" -uroot -p123456 \
 --       --default-character-set=utf8mb4 backend_learning < t_special_category.sql
--- 说明：MySQL 9.x 不支持 ADD COLUMN IF NOT EXISTS，本脚本只执行一次；
---       重复执行会因列名重复报 1060，属预期行为。
+-- 适用场景：表已存在、但还没有 category 列（例如重新导入过旧版 t_special.sql）。
+-- 本脚本可重复执行：列 / 索引已存在时自动跳过，只补尚未分类的行。
+-- 全新安装直接执行 t_special.sql 即可，那份脚本已内置分类列与打标语句。
 -- ============================================================
 
 USE backend_learning;
 
--- 1. 新增分类列，放在 description 之后，便于在 Navicat 中查看
-ALTER TABLE t_special
-    ADD COLUMN category VARCHAR(20) NULL COMMENT '专题分类' AFTER description;
+-- 1. 列不存在才新增（MySQL 9.x 没有 ADD COLUMN IF NOT EXISTS，用 information_schema 判断）
+SET @has_column := (
+    SELECT COUNT(*)
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = 't_special'
+      AND COLUMN_NAME = 'category'
+);
+SET @ddl := IF(@has_column = 0,
+    'ALTER TABLE t_special ADD COLUMN category VARCHAR(20) NULL COMMENT ''专题分类'' AFTER description',
+    'SELECT ''category 列已存在，跳过新增'' AS msg');
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
 
--- 2. 分类列经常出现在 WHERE 条件里，建普通索引
-CREATE INDEX idx_special_category ON t_special (category);
+-- 2. 索引不存在才创建
+SET @has_index := (
+    SELECT COUNT(*)
+    FROM information_schema.STATISTICS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = 't_special'
+      AND INDEX_NAME = 'idx_special_category'
+);
+SET @ddl := IF(@has_index = 0,
+    'CREATE INDEX idx_special_category ON t_special (category)',
+    'SELECT ''idx_special_category 已存在，跳过创建'' AS msg');
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
 
--- 3. 按标题关键词打标。
---    知乎的专题标题多数带活动名（如「网络中国节·端午」），关键词规则比纯数值阈值更贴近语义；
---    先做关键词匹配，匹配不到的再兜底（这里 50 条数据全部能被覆盖）。
---    顺序有意义：先判定节日类，避免「网络中国节·端午」被「网络」抢先归入网络文明。
+-- 3. 只给尚未分类的行打标（顺序即优先级：「网络中国节·端午」必须先被节日规则接住）
 UPDATE t_special
 SET category = CASE
     WHEN title REGEXP '中秋|七夕|端午|元宵|清明|重阳|春节|元旦|国庆|新岁|龙腾|金蛇|骏马|粽香|月圆|华诞|孝满|忆满'
@@ -36,7 +57,7 @@ SET category = CASE
     END
 WHERE category IS NULL;
 
--- 4. 校验：各分类条数与总数
+-- 4. 校验
 SELECT category, COUNT(*) AS total
 FROM t_special
 GROUP BY category

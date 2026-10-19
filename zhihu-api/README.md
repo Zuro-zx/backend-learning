@@ -27,7 +27,7 @@ curl -s -H "User-Agent: Mozilla/5.0 ... Chrome/131" \
 
 清洗里做的三件事：**分页去重**（相邻页会有重叠 id）、**时间戳转日期**、**空简介保留为空串**而不是 `null`（前端直接渲染不会出现 `null` 字样）。
 
-整表数据已随仓库给出：`sql/t_special.sql`（建表 + 50 条 INSERT）。
+整表数据已随仓库给出：`sql/t_special.sql`（建表 + 50 条 INSERT + 分类列与打标，**一份脚本到底**）。
 
 ```bash
 mysql -uroot -p123456 --default-character-set=utf8mb4 backend_learning < sql/t_special.sql
@@ -35,6 +35,10 @@ mysql -uroot -p123456 --default-character-set=utf8mb4 backend_learning < sql/t_s
 
 > 教程里是用 Navicat 的「导入向导」把 CSV 导进去的；等价操作就是执行上面这份 SQL。
 > 为了前端能看到「已关注 / 关注」两种样式，入库时每隔 3 条把 `is_following` 标成 `TRUE`（共 17 条）。
+>
+> 脚本开头是 `DROP TABLE IF EXISTS`，可反复导入；分类列与打标语句已内联在脚本里，
+> **重新导入不会再把 `category` 冲掉**（早前分类是单独一份迁移脚本，重导后列就没了，已修）。
+> 如果表已存在、只是缺分类列，用 `sql/t_special_category.sql` 增量补齐，该脚本幂等，可重复执行。
 
 ## 接口
 
@@ -74,12 +78,12 @@ GET /api/v1/special/all
 
 ## 扩展练习 1：分类字段
 
-`sql/t_special_category.sql` 一次性完成三件事：
+分类的「列 + 索引 + 打标」已经内联进 `sql/t_special.sql`，全新安装执行一份即可；
+`sql/t_special_category.sql` 保留给**已有表**做增量补齐，内部用 `information_schema`
+判断列与索引是否存在，可重复执行（重复执行只打印「已存在，跳过」）。
 
-1. `ALTER TABLE t_special ADD COLUMN category VARCHAR(20)`（带列注释）；
-2. 建 `idx_special_category` 普通索引（分类列会频繁出现在 WHERE 里）；
-3. 按**标题关键词**打标，而不是教程的 followers_count 阈值——这批专题标题多数自带活动名
-   （「网络中国节·端午」「2024国家网络安全宣传周」），关键词规则比数值阈值更贴近语义。
+打标不是教程的 followers_count 阈值，而是按**标题关键词**——这批专题标题多数自带活动名
+（「网络中国节·端午」「2024国家网络安全宣传周」），关键词规则比数值阈值更贴近语义。
 
 规则按顺序短路匹配，**顺序是有意义的**：「网络中国节·端午」必须先被节日规则接住，
 否则会被「网络」抢先归入网络文明。50 条数据的实测分布：
@@ -92,7 +96,8 @@ GET /api/v1/special/all
 | 阅读文化 | 6 |
 | 科技前沿 | 2 |
 
-> MySQL 9.x 不支持 `ADD COLUMN IF NOT EXISTS`，脚本只能执行一次，重复执行报 1060 属预期。
+> MySQL 9.x 不支持 `ADD COLUMN IF NOT EXISTS`，增量脚本改为查 `information_schema` 后动态拼 DDL，
+> 因此可以安全地重复执行；实测连续执行两次，均输出「已存在，跳过」，分类分布不变。
 
 ## 扩展练习 2：按分类查询 + 分类统计
 
@@ -174,8 +179,8 @@ curl -s "http://127.0.0.1:8080/api/v1/special/all" | head -c 200
 zhihu-api
 ├── pom.xml
 ├── sql
-│   ├── t_special.sql              建表 + 50 条 INSERT
-│   └── t_special_category.sql     category 列迁移 + 关键词打标
+│   ├── t_special.sql              建表（含 category 列与索引）+ 50 条 INSERT + 分类打标
+│   └── t_special_category.sql     增量脚本：给已有表补 category 列、索引与分类（幂等）
 └── src
     ├── main/java/top/zsj/zhihu
     │   ├── ZhihuApplication.java        启动类（@MapperScan）

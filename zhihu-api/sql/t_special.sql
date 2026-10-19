@@ -4,12 +4,14 @@ CREATE TABLE t_special (
   id BIGINT NOT NULL COMMENT '专题ID',
   title VARCHAR(255) NOT NULL COMMENT '标题',
   description VARCHAR(1000) DEFAULT NULL COMMENT '简介',
+  category VARCHAR(20) DEFAULT NULL COMMENT '分类',
   banner VARCHAR(500) DEFAULT NULL COMMENT '封面图',
   is_following VARCHAR(10) DEFAULT 'FALSE' COMMENT '是否关注 TRUE/FALSE',
   followers_count INT DEFAULT 0 COMMENT '关注数',
   view_count INT DEFAULT 0 COMMENT '浏览数',
   updated DATETIME DEFAULT NULL COMMENT '更新时间',
-  PRIMARY KEY (id)
+  PRIMARY KEY (id),
+  KEY idx_special_category (category)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='知乎专题';
 INSERT INTO t_special (id,title,description,banner,is_following,followers_count,view_count,updated) VALUES
 (2086116797393257830,'2026中秋｜秋空皓月 人间相思','一轮秋月溯文脉，一席饼食蕴烟火，一缕清光寄团圆','https://pic2.zhimg.com/100/v2-0b76aceb29d84a748a44ac749e317d65_hd.png','TRUE',3,8477088,'2026-09-23 16:10:17'),
@@ -66,3 +68,21 @@ INSERT INTO t_special (id,title,description,banner,is_following,followers_count,
 (1687787446086066176,'2023｜月圆九州 情系中华',' ','https://pic1.zhimg.com/100/v2-5540894d73e922589c08d1071bcb54a4_hd.png','FALSE',50,5581887,'2023-09-29 09:25:14'),
 (1683484777829883904,'2023 年「云上读书季」网络阅读活动',' ','https://pic2.zhimg.com/100/v2-71f844d658df1e8cfb5c32796968d0b9_hd.png','TRUE',265,50446567,'2023-09-15 10:28:13'),
 (1682518300448370689,'用想象力预见未来','为迎接 2023 成都世界科幻大会，营造大会热烈氛围，擦亮成都科幻之都名片内容，结合省市有关科幻主题的世系列活动相关工作相关要求，聚焦成都科普与科幻产业，广泛吸引科幻创作者与泛科幻爱好者的关注和参与，激发全民创新力和想象力，为打造成都科幻之都名片贡献崇州力量，拟联动知乎开展2023用想象力「预见」未来系列科幻活动','https://pic3.zhimg.com/100/v2-63d890808649aa21693ba4553ef20caa_hd.png','FALSE',181,17333557,'2023-09-06 11:37:33');
+
+-- ============================================================
+-- 分类打标（扩展练习 1）：按标题关键词分类，内联在此，重新导入不会丢失
+-- 规则按顺序短路，顺序有意义：「网络中国节·端午」必须先被节日规则接住
+-- ============================================================
+UPDATE t_special
+SET category = CASE
+    WHEN title REGEXP '中秋|七夕|端午|元宵|清明|重阳|春节|元旦|国庆|新岁|龙腾|金蛇|骏马|粽香|月圆|华诞|孝满|忆满' THEN '传统节日'
+    WHEN title REGEXP '网络|网安|护苗|普法|国安|国家安全|互联网|好网民|清朗' THEN '网络文明'
+    WHEN title REGEXP '阅读|读书|好书|书香|文化|大视听|视听' THEN '阅读文化'
+    WHEN title REGEXP '科学|科技|未来|想象' THEN '科技前沿'
+    WHEN title REGEXP '四川|武汉|两会|经济|改革开放|现代化|亲子|健康|跌倒|大道|潮涌|征程|图景|跟党走|北京|法治|学法' THEN '社会民生'
+    ELSE '其他'
+END
+WHERE category IS NULL;
+
+-- 导入后自检：各分类条数
+SELECT category, COUNT(*) AS total FROM t_special GROUP BY category ORDER BY total DESC;
