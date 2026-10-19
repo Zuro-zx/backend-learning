@@ -23,7 +23,7 @@
 **Spring Boot 默认日志框架就是 SLF4J + Logback**，由 `spring-boot-starter-logging` 统一引入。用 `mvn dependency:tree` 实测本模块（Spring Boot 4.1.1）：
 
 ```
-com.example:03-logging:jar:0.0.1-SNAPSHOT
+top.zsj:03-logging:jar:0.0.1-SNAPSHOT
 +- org.springframework.boot:spring-boot-starter-webmvc:jar:4.1.1
 |  +- org.springframework.boot:spring-boot-starter:jar:4.1.1
 |  |  +- org.springframework.boot:spring-boot-starter-logging:jar:4.1.1

@@ -191,8 +191,7 @@ curl "http://127.0.0.1:8006/user/me" -H "Authorization: Bearer eyJ..."
 ### 容联云 SDK 接入（mock-enabled=false 时才走到）
 
 依赖：`com.cloopen:java-sms-sdk:${cloopen.version}`（1.0.4，中央仓库最新）。
-配置在 `application.yml` 的 `zsj.sms.ccpp`（教程用 `mqxu.sms` 前缀，按署名约定改为 `zsj`），
-由 `CloopenConfig`（`@ConfigurationProperties`）绑定。
+配置在 `application.yml` 的 `zsj.sms.ccpp`，由 `CloopenConfig`（`@ConfigurationProperties`）绑定。
 
 **SDK 1.0.4 的真实 API 与教程截图有出入**（截图是旧版 API，编译不过）：
 
