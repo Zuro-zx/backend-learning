@@ -39,6 +39,9 @@ public class Special {
     /** 简介 */
     private String description;
 
+    /** 分类，扩展练习 1 新增，库里由关键词规则打标：传统节日 / 网络文明 / 阅读文化 / 科技前沿 / 社会民生 */
+    private String category;
+
     /** 封面图地址 */
     private String banner;
 

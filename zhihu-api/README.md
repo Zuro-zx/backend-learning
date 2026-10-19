@@ -72,6 +72,73 @@ GET /api/v1/special/all
 2. **`updated` 用 `LocalDateTime` + `@JsonFormat`**。教程实体里是 `Long`，那样前端卡片上会显示
    `1790151017` 这种时间戳；改成 DATETIME 后在库里可读、接口直接返回 `2026-09-23 16:10:17`。
 
+## 扩展练习 1：分类字段
+
+`sql/t_special_category.sql` 一次性完成三件事：
+
+1. `ALTER TABLE t_special ADD COLUMN category VARCHAR(20)`（带列注释）；
+2. 建 `idx_special_category` 普通索引（分类列会频繁出现在 WHERE 里）；
+3. 按**标题关键词**打标，而不是教程的 followers_count 阈值——这批专题标题多数自带活动名
+   （「网络中国节·端午」「2024国家网络安全宣传周」），关键词规则比数值阈值更贴近语义。
+
+规则按顺序短路匹配，**顺序是有意义的**：「网络中国节·端午」必须先被节日规则接住，
+否则会被「网络」抢先归入网络文明。50 条数据的实测分布：
+
+| 分类 | 条数 |
+|---|---|
+| 传统节日 | 18 |
+| 网络文明 | 13 |
+| 社会民生 | 11 |
+| 阅读文化 | 6 |
+| 科技前沿 | 2 |
+
+> MySQL 9.x 不支持 `ADD COLUMN IF NOT EXISTS`，脚本只能执行一次，重复执行报 1060 属预期。
+
+## 扩展练习 2：按分类查询 + 分类统计
+
+```
+GET /api/v1/special/category/科技前沿
+GET /api/v1/special/categories
+```
+
+`/category/{category}` 传空或「全部」时等价于查全部；`/categories` 返回每个分类及条数
+（`mapper` 里唯一一段注解 SQL：`GROUP BY category`），前端下拉框直接用它渲染
+「传统节日（18）」这种选项，不用再发一次 `/all` 数一遍。
+
+## 扩展练习 3：分页
+
+```
+GET /api/v1/special/page?limit=5&offset=0&category=传统节日
+```
+
+```json
+{
+  "code": 200,
+  "msg": "数据获取成功",
+  "data": {
+    "records": ["…5 条 Special…"],
+    "total": 50,
+    "limit": 5,
+    "offset": 0,
+    "hasNext": true,
+    "hasPrev": false
+  }
+}
+```
+
+三个与教程不同的实现细节：
+
+1. **显式 `LIMIT ? OFFSET ?` 而不是分页插件**。分页插件的入参是「页码 × 每页条数」，
+   而 `/page` 沿用知乎原始接口的 offset 语义，任意 offset（比如 `offset=4, limit=3`）
+   用页码换算会错位；`limit` / `offset` 在 Controller 已收敛为 int（1~50、>=0），
+   拼进 SQL 没有注入面。`pom` 里的 `mybatis-plus-jsqlparser` 保留，想换成分页插件随时可以。
+2. **排序加 `id DESC` 兜底**。同批导入的数据 `updated` 大量重复，只按 updated 排序时
+   MySQL 不保证跨页顺序稳定，翻页会出现重复或漏条；`id` 是 19 位定长数字，字符串排序即数值序。
+3. **参数收敛**：`limit=999&offset=-3` 会被收敛成 `limit=50&offset=0`（实测 50 条、`hasNext=false`），
+   `offset` 越过末尾返回空列表而不是报错。
+
+`total` 用 `selectCount` 单独查，`hasNext` / `hasPrev` 在服务层算好，前端不必自己推边界。
+
 ## 运行
 
 ```bash
@@ -87,8 +154,14 @@ E:/tools/apache-maven-3.9.16/bin/mvn -pl zhihu-api -am spring-boot:run
 curl -s "http://127.0.0.1:8080/api/v1/special/all" | head -c 200
 ```
 
-单元测试 `SpecialServiceTest` 直连本机 MySQL，跑 `mvn -pl zhihu-api test` 即可，
-日志里会打印 50 条专题（控制台是 GBK 时中文可能显示成乱码，属于终端编码问题，不影响数据）。
+单元测试 `SpecialServiceTest` 直连本机 MySQL，跑 `mvn -pl zhihu-api test` 即可，共 4 个用例：
+
+- `getAll`：非空 + updated 倒序；
+- `getByCategory`：分类过滤结果全部属于该分类，空 / 「全部」等价于查全部；
+- `getByPage`：相邻两页 id 不重叠（验证排序稳定）、尾页 `hasNext=false`、越界 offset 返回空列表、分类+分页组合；
+- `getCategoryStats`：各分类条数之和等于总条数。
+
+控制台是 GBK 时中文可能显示成乱码，属于终端编码问题，不影响数据。
 
 ## 跨域
 
@@ -100,15 +173,19 @@ curl -s "http://127.0.0.1:8080/api/v1/special/all" | head -c 200
 ```
 zhihu-api
 ├── pom.xml
-├── sql/t_special.sql
+├── sql
+│   ├── t_special.sql              建表 + 50 条 INSERT
+│   └── t_special_category.sql     category 列迁移 + 关键词打标
 └── src
     ├── main/java/top/zsj/zhihu
     │   ├── ZhihuApplication.java        启动类（@MapperScan）
     │   ├── common/ResponseResult.java   code / msg / data
+    │   ├── common/PageResult.java       records / total / limit / offset / hasNext / hasPrev
     │   ├── config/WebConfig.java        CORS
-    │   ├── controller/SpecialController.java
+    │   ├── controller/SpecialController.java   /all /category/{c} /page /categories
+    │   ├── dto/CategoryCount.java       分类统计
     │   ├── entity/Special.java
-    │   ├── mapper/SpecialMapper.java    BaseMapper
+    │   ├── mapper/SpecialMapper.java    BaseMapper + 分类聚合
     │   └── service/{SpecialService,impl/SpecialServiceImpl}.java
     ├── main/resources/application.yml
     └── test/java/top/zsj/zhihu/service/SpecialServiceTest.java
