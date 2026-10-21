@@ -4,3 +4,25 @@ server:
 spring:
   application:
     name: 08-schedule
+  # 本地私有配置：邮箱授权码、天气 API Key 等敏感信息放 application-local.yml，不入库
+  # 仓库中不含该文件，克隆后按 README 自行创建（缺失时应用仍可启动）
+  config:
+    import: optional:classpath:application-local.yml
+  mail:
+    host: smtp.qq.com
+    port: 587
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+
+# 天气 API 非敏感配置；key 与 url 由 application-local.yml 提供
+weather:
+  api:
+    city: 101190501                 # 城市 ID：南通（101190101 南京、101010100 北京）
+    city-name: 南通                 # 城市名，用于邮件标题
+
+# 收件人由 application-local.yml 的 email.recipients 提供（逗号分隔）
