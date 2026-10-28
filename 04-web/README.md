@@ -354,6 +354,62 @@ INFO  top.zsj.web.common.LogInterceptor    : <<< GET /nope  状态=200  耗时=2
 **两个都必须把状态放 `request` 属性里**（`request.setAttribute`），
 不能用成员变量——Filter 和 Interceptor 都是单例，多线程会互相串。
 
+### 8.1 注册练习：LogFilter（2026-10-28）
+
+教程四步：了解过滤器位置 → 自定义过滤器 → `FilterRegistrationBean` 注册 → 启动验证。
+
+| 文件 | 说明 |
+|---|---|
+| `common/LogFilter.java` | 实现 `jakarta.servlet.Filter` 三件套 `init` / `doFilter` / `destroy`，打印请求方法、路径、参数 |
+| `config/FilterConfig.java` | `FilterRegistrationBean` 注册：拦截 `/api/log/hello`、order=2、初始化参数 `exclusions` |
+| `controller/LogController.java` | 带参验证接口 `GET /api/log/hello?name=&age=` |
+
+要点：`LogFilter` **故意不标 `@Component`**——标了会被自动注册到 `/*`，拦截路径和顺序就控不住了；
+`FilterRegistrationBean` 比 `@Component` 多三样能力：urlPatterns、order（越小越先执行）、initParameter
+（在 `init(FilterConfig)` 里 `getInitParameter("exclusions")` 读到）。
+
+实测（端口 8004，`mvn -o compile` BUILD SUCCESS）：
+
+```
+INFO ... LogFilter         : LogFilter 过滤器初始化
+INFO ... LogFilter         : LogFilter 排除资源配置：*.js,*.css,*.png
+INFO ... LogFilter         : [LogFilter] 请求方法: GET，请求路径: /api/log/hello，请求参数: {name=zsj, age=21}
+INFO ... RequestTimeFilter : [Filter]  GET /api/log/hello  总耗时=5ms
+```
+
+带参返回 `{"code":200,"data":"hello, zsj（age=21），请求已穿过 LogFilter",...}`；
+不带参时参数打印 `{}`，接口走 defaultValue；访问 `/param/*` 等其他路径无 LogFilter 日志（urlPatterns 限定生效）。
+
+### 8.2 拦截器练习：TimeStatInterceptor（2026-10-28）
+
+自定义拦截器统计每个接口的执行耗时，并观察 Filter 与 Interceptor 的执行顺序。
+
+| 文件 | 说明 |
+|---|---|
+| `common/TimeStatInterceptor.java` | 实现 `HandlerInterceptor`：`preHandle` 把开始时间放 request 属性，`afterCompletion` 计算耗时并打印（带线程名） |
+| `config/WebConfig.java` | `@RequiredArgsConstructor` 构造器注入拦截器 Bean；`addPathPatterns("/**")`、`excludePathPatterns("/static/**", "/error")`、`.order(1)` |
+
+要点：
+
+1. **开始时间放 request 属性**（`setAttribute`），拦截器单例不能用成员变量；
+2. `order` 数值越小，`preHandle` 越先执行；**`afterCompletion` 按相反顺序执行**——
+   所以日志里 TimeStat 的耗时行出现在 LogInterceptor 的 `<<<` 行之后；
+3. `handler.getClass().getSimpleName()` 打印的是 `HandlerMethod`（Spring 包装的处理器类型），
+   想要控制器类名需要 `((HandlerMethod) handler).getBeanType()`。
+
+实测（端口 8004，同一请求 `/api/log/hello` 的完整执行链，同一线程 `http-nio-8004-exec-4`）：
+
+```
+INFO ... LogFilter         : [LogFilter] 请求方法: GET，请求路径: /api/log/hello，请求参数: {name=zsj, age=21}
+INFO ... LogInterceptor    : >>> GET /api/log/hello  处理器=LogController.hello
+INFO ... LogInterceptor    : <<< GET /api/log/hello  状态=200  耗时=2ms
+INFO ... TimeStatInterceptor : [TimeStat] 接口耗时 - 方法: HandlerMethod，耗时: 2ms，线程: http-nio-8004-exec-4
+INFO ... RequestTimeFilter : [Filter]  GET /api/log/hello  总耗时=3ms
+```
+
+顺序与理论一致：Filter（容器层，先入后出）→ DispatcherServlet → Interceptor（MVC 层）→ Controller，
+Filter 的总耗时 ≥ Interceptor 的耗时。
+
 ---
 
 ## 9. 日志与跨域配置
@@ -508,6 +564,12 @@ org.springframework.web.bind.MissingServletRequestParameterException:
 | GET | `/param/cookie` | `@CookieValue` |
 | GET | `/param/servlet` | 原生 Servlet API |
 | POST | `/param/form` | 表单提交 |
+
+### LogController `/api/log`
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/api/log/hello?name=&age=` | 过滤器验证接口，由 LogFilter（`/api/log/hello`、order=2）拦截 |
 
 ---
 
