@@ -4,3 +4,44 @@ server:
 spring:
   application:
     name: 09-security
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/backend_learning?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    username: root
+    password: 123456            # 按本机 MySQL 实际密码修改
+    hikari:
+      pool-name: security-learning-pool
+      maximum-pool-size: 10     # 文档约定：最大 10 个连接，够课堂与本地演示
+      minimum-idle: 5
+      connection-timeout: 3000
+      max-lifetime: 1800000
+  # 启动时先删后建 sec_ 四表，再灌演示数据；改表结构重启即可，不用手工 ALTER
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema.sql
+      data-locations: classpath:data.sql
+      encoding: UTF-8
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    # 不打印 SQL，测试输出保持干净；要排查 SQL 时换回 StdOutImpl
+    log-impl: org.apache.ibatis.logging.nologging.NoLoggingImpl
+  global-config:
+    banner: false
+    db-config:
+      id-type: auto
+      table-underline: true
+
+# 模块自有配置：JWT 与 CORS（详见 top.zsj.security.security.JwtProperties）
+security:
+  jwt:
+    # HS256 密钥，长度必须 >= 32 字节；生产环境改从环境变量注入
+    secret: backend-learning-09-security-jwt-hs256-secret-key
+    # 令牌有效期 120 分钟（BR-6），不做刷新令牌
+    expire-minutes: 120
+  cors:
+    # 分离部署时允许的前端来源；localhost 与 127.0.0.1 都要放行，
+    # 少一个浏览器就会收到 403 Invalid CORS request（页面开在哪个域，Origin 就是哪个）
+    allowed-origins: http://localhost:5173,http://127.0.0.1:5173

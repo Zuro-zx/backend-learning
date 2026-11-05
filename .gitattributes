@@ -1,2 +1,4 @@
 /mvnw text eol=lf
 *.cmd text eol=crlf
+# 验收脚本要在 Git Bash 里直接跑，CRLF 会让 bash 解析出错
+*.sh text eol=lf

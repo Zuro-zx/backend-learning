@@ -37,3 +37,10 @@ build/
 
 ### 本机私有配置（含短信等第三方凭证，绝不提交）###
 **/application-local.yml
+
+### 前端（09-security/web）###
+09-security/web/node_modules/
+09-security/web/dist/
+
+# 含密钥的本地配置，禁止提交
+aliyun-oss.properties
