@@ -17,7 +17,7 @@ import java.util.concurrent.TimeUnit;
  * <table border="1">
  *   <caption>四种仪表</caption>
  *   <tr><th>类型</th><th>指标名</th><th>为什么是它</th></tr>
- *   <tr><td>Counter</td><td>{@code biz.order.created}</td><td>只增不减的累计数，用 {@code result} 标签区分成功/失败</td></tr>
+ *   <tr><td>Counter</td><td>{@code biz.order.placed}</td><td>只增不减的累计数，用 {@code result} 标签区分成功/失败</td></tr>
  *   <tr><td>Gauge</td><td>{@code biz.inventory.low.stock}</td><td>可增可减的瞬时值，直接读 {@link InventoryStore} 的当前状态</td></tr>
  *   <tr><td>Timer</td><td>{@code biz.order.process}</td><td>既计时长又计次数，还能算分位</td></tr>
  *   <tr><td>DistributionSummary</td><td>{@code biz.order.amount}</td><td>不是时间的「分布」，比如金额</td></tr>
