@@ -1,0 +1,343 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "11 测试 · 订单试算接口",
+    "description": "单元 / 切片 / 集成三层测试的样例接口。金额规则：满300减40、满100减10、金卡满减后 95 折、应付不低于 0.01。",
+    "version": "1.0.0",
+    "contact": {
+      "name": "zsj",
+      "email": "1370195289@qq.com"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8011",
+      "description": "本地开发"
+    }
+  ],
+  "tags": [
+    {
+      "name": "订单试算",
+      "description": "唯一一组业务接口"
+    }
+  ],
+  "paths": {
+    "/orders/calculate": {
+      "post": {
+        "tags": [
+          "订单试算"
+        ],
+        "summary": "下单试算（POST）",
+        "description": "规则：满 300 减 40 → 满 100 减 10 → 金卡在满减之后再打 95 折 → 任何情况应付不低于 0.01。\n\nquantity 超过库存（默认 100）返回 409 / 20409。",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrderRequest"
+              },
+              "example": {
+                "orderNo": "QUICK-001",
+                "amount": 300.0,
+                "goldCard": true,
+                "sku": "SKU-1",
+                "quantity": 2
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "试算成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultOrderResult"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "成功",
+                  "data": {
+                    "orderNo": "QUICK-001",
+                    "originalAmount": 300.0,
+                    "reduceAmount": 40,
+                    "goldCardDiscount": 13.0,
+                    "payable": 247.0,
+                    "availableStock": 100,
+                    "appliedRules": [
+                      "满300减40",
+                      "金卡95折"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "参数校验失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultError"
+                },
+                "example": {
+                  "code": 20400,
+                  "message": "amount 金额不能为空; orderNo 订单号不能为空",
+                  "data": null
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "库存不足",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultError"
+                },
+                "example": {
+                  "code": 20409,
+                  "message": "库存不足：需要 101 件，仅剩 100 件",
+                  "data": null
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/orders/quick-calculate": {
+      "get": {
+        "tags": [
+          "订单试算"
+        ],
+        "summary": "快捷试算（GET）",
+        "description": "订单号固定为 QUICK，只传金额和金卡标记。",
+        "parameters": [
+          {
+            "name": "amount",
+            "in": "query",
+            "description": "金额",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "example": 100
+            }
+          },
+          {
+            "name": "goldCard",
+            "in": "query",
+            "description": "是否金卡",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "example": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "试算成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultOrderResult"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "成功",
+                  "data": {
+                    "orderNo": "QUICK",
+                    "originalAmount": 100.0,
+                    "reduceAmount": 10,
+                    "goldCardDiscount": 4.5,
+                    "payable": 85.5,
+                    "availableStock": 100,
+                    "appliedRules": [
+                      "满100减10",
+                      "金卡95折"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "类型不匹配 / 缺参",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultError"
+                },
+                "example": {
+                  "code": 20400,
+                  "message": "参数 amount 类型不正确，期望 BigDecimal",
+                  "data": null
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/orders/hello": {
+      "get": {
+        "tags": [
+          "订单试算"
+        ],
+        "summary": "健康探针",
+        "description": "最简单的连通性检查。",
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultString"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "成功",
+                  "data": "hello"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "OrderRequest": {
+        "type": "object",
+        "properties": {
+          "orderNo": {
+            "type": "string",
+            "description": "订单号",
+            "example": "QUICK-001"
+          },
+          "amount": {
+            "type": "number",
+            "description": "订单金额，最小 0.01",
+            "example": 300.0
+          },
+          "goldCard": {
+            "type": "boolean",
+            "description": "是否金卡会员，缺省 false",
+            "example": true
+          },
+          "sku": {
+            "type": "string",
+            "description": "商品编码，缺省 SKU-DEFAULT",
+            "example": "SKU-1"
+          },
+          "quantity": {
+            "type": "integer",
+            "description": "数量，缺省 1",
+            "example": 2
+          }
+        },
+        "required": [
+          "orderNo",
+          "amount"
+        ]
+      },
+      "OrderResult": {
+        "type": "object",
+        "properties": {
+          "orderNo": {
+            "type": "string"
+          },
+          "originalAmount": {
+            "type": "number",
+            "description": "原价"
+          },
+          "reduceAmount": {
+            "type": "number",
+            "description": "满减金额"
+          },
+          "goldCardDiscount": {
+            "type": "number",
+            "description": "金卡折扣金额"
+          },
+          "payable": {
+            "type": "number",
+            "description": "应付金额，最低 0.01"
+          },
+          "availableStock": {
+            "type": "integer",
+            "description": "库存余量（取自 InventoryClient）"
+          },
+          "appliedRules": {
+            "type": "array",
+            "description": "命中的规则，便于排查",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "example": {
+          "orderNo": "QUICK-001",
+          "originalAmount": 300.0,
+          "reduceAmount": 40.0,
+          "goldCardDiscount": 13.0,
+          "payable": 247.0,
+          "availableStock": 100,
+          "appliedRules": [
+            "满300减40",
+            "金卡95折"
+          ]
+        }
+      },
+      "ResultOrderResult": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/OrderResult"
+          }
+        }
+      },
+      "ResultString": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "example": 0
+          },
+          "message": {
+            "type": "string",
+            "example": "成功"
+          },
+          "data": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "ResultError": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "example": 20400
+          },
+          "message": {
+            "type": "string",
+            "example": "参数校验失败"
+          },
+          "data": {
+            "type": "object",
+            "nullable": true
+          }
+        }
+      }
+    }
+  }
+}

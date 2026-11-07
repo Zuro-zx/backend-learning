@@ -1,0 +1,624 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "图书管理接口",
+    "description": "这是 10-doc 模块的示例文档。\n<p>\n文档由代码注解生成，改代码即改文档，不需要额外维护一份 Markdown。\n",
+    "contact": {
+      "name": "zsj",
+      "email": "1370195289@qq.com"
+    },
+    "license": {
+      "name": "MIT",
+      "url": "https://opensource.org/licenses/MIT"
+    },
+    "version": "1.0.0"
+  },
+  "externalDocs": {
+    "description": "模块教程",
+    "url": "https://github.com/Zuro-zx/backend-learning"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8010",
+      "description": "本地开发"
+    },
+    {
+      "url": "https://api.example.com",
+      "description": "生产环境"
+    }
+  ],
+  "tags": [
+    {
+      "name": "图书管理",
+      "description": "图书的增删改查、分页与分类查询"
+    },
+    {
+      "name": "运维接口",
+      "description": "健康检查等内部接口，单独成组"
+    }
+  ],
+  "paths": {
+    "/books": {
+      "get": {
+        "tags": [
+          "图书管理"
+        ],
+        "summary": "分页查询图书",
+        "description": "支持按关键字（书名或作者）与分类过滤。两个条件都可省略，不传即查全部。",
+        "operationId": "page",
+        "parameters": [
+          {
+            "name": "pageNum",
+            "in": "query",
+            "description": "页码，从 1 开始",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "description": "页码，从 1 开始",
+              "format": "int32",
+              "example": 1,
+              "default": 1
+            },
+            "example": 1
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "description": "每页条数",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "description": "每页条数",
+              "format": "int32",
+              "example": 10,
+              "default": 10
+            },
+            "example": 10
+          },
+          {
+            "name": "keyword",
+            "in": "query",
+            "description": "关键字，匹配书名或作者",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "关键字，匹配书名或作者",
+              "example": "Java"
+            },
+            "example": "Java"
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "description": "分类过滤",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "图书分类",
+              "example": "TECH",
+              "enum": [
+                "TECH",
+                "LITERATURE",
+                "HISTORY",
+                "SCIENCE",
+                "OTHER"
+              ]
+            },
+            "example": "TECH"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "查询成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultPageResultBook"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "分页参数非法",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Result"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "图书管理"
+        ],
+        "summary": "新增图书",
+        "description": "ISBN 全局唯一，重复时返回 409",
+        "operationId": "create",
+        "requestBody": {
+          "description": "图书信息，除库存与出版日期外都是必填",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BookCreateRequest"
+              },
+              "examples": {
+                "标准示例": {
+                  "description": "标准示例",
+                  "value": {
+                    "title": "重构：改善既有代码的设计",
+                    "author": "Martin Fowler",
+                    "isbn": "9787115508645",
+                    "category": "TECH",
+                    "price": 118.0,
+                    "stock": 15,
+                    "publishDate": "2019-05-01"
+                  }
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "新增成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultBook"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "参数校验失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Result"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ISBN 已存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Result"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ops/health": {
+      "get": {
+        "tags": [
+          "运维接口"
+        ],
+        "summary": "健康检查",
+        "description": "返回进程存活状态与启动时间",
+        "operationId": "health",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultMapStringObject"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/books/{id}": {
+      "get": {
+        "tags": [
+          "图书管理"
+        ],
+        "summary": "查询图书详情",
+        "operationId": "getById",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "图书 ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "example": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "查询成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultBook"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "图书不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Result"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "图书管理"
+        ],
+        "summary": "删除图书",
+        "operationId": "delete",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "图书 ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "example": 6
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "删除成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultVoid"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "图书不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Result"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/books/categories": {
+      "get": {
+        "tags": [
+          "图书管理"
+        ],
+        "summary": "查询全部分类",
+        "description": "枚举值，前端下拉框直接用这个接口的返回渲染",
+        "operationId": "categories",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultListCategory"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/books/boom": {
+      "get": {
+        "tags": [
+          "图书管理"
+        ],
+        "summary": "触发未预期异常",
+        "description": "演示 500 响应的结构，生产环境不会保留这种接口",
+        "operationId": "boom",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultVoid"
+                }
+              }
+            }
+          }
+        },
+        "deprecated": true
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "BookCreateRequest": {
+        "required": [
+          "author",
+          "category",
+          "isbn",
+          "price",
+          "title"
+        ],
+        "type": "object",
+        "properties": {
+          "title": {
+            "maxLength": 100,
+            "minLength": 0,
+            "type": "string",
+            "description": "书名",
+            "example": "重构：改善既有代码的设计"
+          },
+          "author": {
+            "maxLength": 50,
+            "minLength": 0,
+            "type": "string",
+            "description": "作者",
+            "example": "Martin Fowler"
+          },
+          "isbn": {
+            "minLength": 1,
+            "pattern": "^\\d{13}$",
+            "type": "string",
+            "description": "13 位 ISBN",
+            "example": "9787115508645"
+          },
+          "category": {
+            "type": "string",
+            "description": "图书分类",
+            "example": "TECH",
+            "enum": [
+              "TECH",
+              "LITERATURE",
+              "HISTORY",
+              "SCIENCE",
+              "OTHER"
+            ]
+          },
+          "price": {
+            "minimum": 0.01,
+            "exclusiveMinimum": false,
+            "type": "number",
+            "description": "单价，单位元",
+            "example": 118.0
+          },
+          "stock": {
+            "minimum": 0,
+            "type": "integer",
+            "description": "库存，默认 0",
+            "format": "int32",
+            "example": 15
+          },
+          "publishDate": {
+            "type": "string",
+            "description": "出版日期",
+            "format": "date",
+            "example": "2019-05-01"
+          }
+        },
+        "description": "新增图书请求"
+      },
+      "Result": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object"
+          }
+        }
+      },
+      "Book": {
+        "required": [
+          "title"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "主键",
+            "format": "int64",
+            "readOnly": true,
+            "example": 1
+          },
+          "title": {
+            "type": "string",
+            "description": "书名",
+            "example": "深入理解 Java 虚拟机"
+          },
+          "author": {
+            "type": "string",
+            "description": "作者",
+            "example": "周志明"
+          },
+          "isbn": {
+            "type": "string",
+            "description": "13 位 ISBN",
+            "example": "9787111641247"
+          },
+          "category": {
+            "type": "string",
+            "description": "图书分类",
+            "example": "TECH",
+            "enum": [
+              "TECH",
+              "LITERATURE",
+              "HISTORY",
+              "SCIENCE",
+              "OTHER"
+            ]
+          },
+          "price": {
+            "type": "number",
+            "description": "单价，单位元，保留两位小数",
+            "example": 129.0
+          },
+          "stock": {
+            "type": "integer",
+            "description": "库存",
+            "format": "int32",
+            "example": 20
+          },
+          "publishDate": {
+            "type": "string",
+            "description": "出版日期",
+            "format": "date",
+            "example": "2019-12-01"
+          },
+          "createTime": {
+            "type": "string",
+            "description": "创建时间，由服务端写入",
+            "format": "date-time",
+            "readOnly": true
+          }
+        },
+        "description": "图书信息"
+      },
+      "ResultBook": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/Book"
+          }
+        }
+      },
+      "ResultMapStringObject": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object"
+            }
+          }
+        }
+      },
+      "PageResultBook": {
+        "type": "object",
+        "properties": {
+          "list": {
+            "type": "array",
+            "description": "当前页数据",
+            "items": {
+              "$ref": "#/components/schemas/Book"
+            }
+          },
+          "total": {
+            "type": "integer",
+            "description": "总条数",
+            "format": "int64",
+            "example": 5
+          },
+          "pageNum": {
+            "type": "integer",
+            "description": "页码，从 1 开始",
+            "format": "int32",
+            "example": 1
+          },
+          "pageSize": {
+            "type": "integer",
+            "description": "每页条数",
+            "format": "int32",
+            "example": 3
+          }
+        },
+        "description": "分页结果"
+      },
+      "ResultPageResultBook": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/PageResultBook"
+          }
+        }
+      },
+      "ResultListCategory": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "图书分类",
+              "enum": [
+                "TECH",
+                "LITERATURE",
+                "HISTORY",
+                "SCIENCE",
+                "OTHER"
+              ]
+            }
+          }
+        }
+      },
+      "ResultVoid": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object"
+          }
+        }
+      }
+    }
+  }
+}

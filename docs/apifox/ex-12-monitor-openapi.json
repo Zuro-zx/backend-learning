@@ -1,0 +1,492 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "12 应用监控 · 下单与库存接口",
+    "description": "Actuator + Micrometer 练习。四种仪表：Counter(biz.order.placed)、Gauge(biz.inventory.low.stock)、Timer(biz.order.process)、DistributionSummary(biz.order.amount)。",
+    "version": "1.0.0",
+    "contact": {
+      "name": "zsj",
+      "email": "1370195289@qq.com"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8012",
+      "description": "本地开发"
+    }
+  ],
+  "tags": [
+    {
+      "name": "下单",
+      "description": "唯一业务写接口"
+    },
+    {
+      "name": "库存",
+      "description": "演示库存变化对 Gauge / Health 的影响"
+    },
+    {
+      "name": "Actuator 端点",
+      "description": "health / info / metrics / prometheus"
+    }
+  ],
+  "paths": {
+    "/orders": {
+      "post": {
+        "tags": [
+          "下单"
+        ],
+        "summary": "下单",
+        "description": "扣库存并埋点：Counter（成功/失败）、Timer（耗时）、DistributionSummary（金额）。\n\n库存不够返回 409 / 20409；失败也会记一次 Counter，金额不记（避免分布被脏数据带偏）。",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrderRequest"
+              },
+              "example": {
+                "sku": "SKU-001",
+                "quantity": 3,
+                "amount": 129.0
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "下单成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultOrderResult"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "成功",
+                  "data": {
+                    "orderNo": "NO-1",
+                    "sku": "SKU-001",
+                    "quantity": 3,
+                    "amount": 129.0,
+                    "remainingStock": 47
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "参数校验失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultError"
+                },
+                "example": {
+                  "code": 20400,
+                  "message": "quantity 数量至少为 1",
+                  "data": null
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "库存不足",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultError"
+                },
+                "example": {
+                  "code": 20409,
+                  "message": "库存不足：需要 999 件，仅剩 30 件",
+                  "data": null
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/inventory": {
+      "get": {
+        "tags": [
+          "库存"
+        ],
+        "summary": "查看全部库存",
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultMapStringInt"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "成功",
+                  "data": {
+                    "SKU-001": 50,
+                    "SKU-002": 30,
+                    "SKU-003": 10
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/inventory/{sku}/stock": {
+      "post": {
+        "tags": [
+          "库存"
+        ],
+        "summary": "设置库存",
+        "description": "演示用：把某个 SKU 改成指定值。改成 0 会让 /actuator/health 变 DOWN（自定义 HealthIndicator）。",
+        "parameters": [
+          {
+            "name": "sku",
+            "in": "path",
+            "description": "商品编码",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "SKU-002"
+            }
+          },
+          {
+            "name": "value",
+            "in": "query",
+            "description": "库存值",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "example": 3
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "设置成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultInt"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "成功",
+                  "data": 3
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/actuator/health": {
+      "get": {
+        "tags": [
+          "Actuator 端点"
+        ],
+        "summary": "健康检查",
+        "description": "含自定义 inventory 指示器：只有某个 SKU 归零才 DOWN，低库存只报警不摘流量。\n\n任意组件 DOWN 时 HTTP 状态码是 503。",
+        "responses": {
+          "200": {
+            "description": "全部组件正常",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                },
+                "example": {
+                  "status": "UP",
+                  "components": {
+                    "inventory": {
+                      "status": "UP"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "有组件 DOWN",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                },
+                "example": {
+                  "status": "DOWN",
+                  "components": {
+                    "inventory": {
+                      "status": "DOWN",
+                      "details": {
+                        "zeroStock": [
+                          "SKU-002"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/actuator/info": {
+      "get": {
+        "tags": [
+          "Actuator 端点"
+        ],
+        "summary": "应用信息",
+        "description": "自定义 InfoContributor 注入的版本 / 负责人 / 启动时间。",
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Info"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/actuator/metrics": {
+      "get": {
+        "tags": [
+          "Actuator 端点"
+        ],
+        "summary": "指标列表",
+        "description": "返回所有 meter 名字；取单个指标用 /actuator/metrics/{name}。",
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/actuator/prometheus": {
+      "get": {
+        "tags": [
+          "Actuator 端点"
+        ],
+        "summary": "Prometheus 抓取格式",
+        "description": "指标名会被规范化：biz.order.placed → biz_order_placed_total。\n\n验指标以这里为准，不要只看 /actuator/metrics。",
+        "responses": {
+          "200": {
+            "description": "text/plain 指标文本",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "OrderRequest": {
+        "type": "object",
+        "properties": {
+          "sku": {
+            "type": "string",
+            "description": "商品编码",
+            "example": "SKU-001"
+          },
+          "quantity": {
+            "type": "integer",
+            "description": "数量，至少 1",
+            "example": 3
+          },
+          "amount": {
+            "type": "number",
+            "description": "金额，最小 0.01",
+            "example": 129.0
+          }
+        },
+        "required": [
+          "sku",
+          "quantity",
+          "amount"
+        ]
+      },
+      "OrderResult": {
+        "type": "object",
+        "properties": {
+          "orderNo": {
+            "type": "string"
+          },
+          "sku": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "integer"
+          },
+          "amount": {
+            "type": "number"
+          },
+          "remainingStock": {
+            "type": "integer",
+            "description": "下单后剩余库存"
+          }
+        },
+        "example": {
+          "orderNo": "NO-1",
+          "sku": "SKU-001",
+          "quantity": 3,
+          "amount": 129.0,
+          "remainingStock": 47
+        }
+      },
+      "ResultOrderResult": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/OrderResult"
+          }
+        }
+      },
+      "ResultMapStringInt": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "example": 0
+          },
+          "message": {
+            "type": "string",
+            "example": "成功"
+          },
+          "data": {
+            "type": "object",
+            "description": "sku → 库存",
+            "additionalProperties": {
+              "type": "integer"
+            }
+          }
+        }
+      },
+      "ResultInt": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "example": 0
+          },
+          "message": {
+            "type": "string",
+            "example": "成功"
+          },
+          "data": {
+            "type": "integer",
+            "example": 3
+          }
+        }
+      },
+      "ResultError": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "example": 20409
+          },
+          "message": {
+            "type": "string",
+            "example": "库存不足"
+          },
+          "data": {
+            "type": "object",
+            "nullable": true
+          }
+        }
+      },
+      "Health": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "UP / DOWN",
+            "example": "UP"
+          },
+          "components": {
+            "type": "object"
+          }
+        },
+        "example": {
+          "status": "UP",
+          "components": {
+            "inventory": {
+              "status": "UP"
+            }
+          }
+        }
+      },
+      "Info": {
+        "type": "object",
+        "properties": {
+          "app": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "version": {
+                "type": "string"
+              },
+              "owner": {
+                "type": "string"
+              },
+              "profiles": {
+                "type": "string"
+              }
+            }
+          },
+          "java": {
+            "type": "string"
+          },
+          "startedAt": {
+            "type": "string",
+            "description": "应用启动时间"
+          }
+        },
+        "example": {
+          "app": {
+            "name": "12-monitor",
+            "version": "0.0.1-SNAPSHOT",
+            "owner": "zsj",
+            "profiles": "default"
+          },
+          "java": "21.0.4",
+          "startedAt": "2026-11-08T00:50:12.770565800"
+        }
+      }
+    }
+  }
+}

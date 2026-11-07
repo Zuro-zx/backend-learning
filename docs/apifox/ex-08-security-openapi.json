@@ -1,0 +1,1499 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "08 认证与授权 · 练习接口",
+    "description": "Spring Security 7 六条并行过滤器链的练习题接口。\n\n六个账号密码统一 `123456`：\n\n| 账号 | 角色 / 权限点 | 状态 | 用来验证 |\n| --- | --- | --- | --- |\n| alice | ROLE_USER + ARTICLE_DELETE | 正常 | 细粒度权限点 |\n| bob | ROLE_ADMIN + ROLE_AUDITOR | 正常 | 管理员、hasAllRoles 放行 |\n| carol | ROLE_ADMIN | 正常 | hasAllRoles 拒绝（少 AUDITOR） |\n| dave | ROLE_USER | 禁用 | 403 账号已被禁用 |\n| frank | ROLE_USER | 锁定 | 403 账号已被锁定 |\n| erin | ROLE_AUDITOR | 正常 | hasAnyRole 放行 |\n\n**注意鉴权方式按链不同**：`/stage1` `/stage2` `/stage3` 是 httpBasic，`/stage5` 和 `/api/**` 才读 Bearer token，`/stage4` 是 Cookie 会话 + CSRF。",
+    "version": "1.0.0",
+    "contact": {
+      "name": "zsj",
+      "email": "1370195289@qq.com"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8008",
+      "description": "本地开发"
+    }
+  ],
+  "tags": [
+    {
+      "name": "认证（密码 + JWT）",
+      "description": "登录 / me / 登出 / 改密"
+    },
+    {
+      "name": "短信验证码登录",
+      "description": "图形验证码 → 发码 → 换 token"
+    },
+    {
+      "name": "业务接口（权限点 / @PreAuthorize）",
+      "description": "链上规则 + 方法级注解"
+    },
+    {
+      "name": "阶段演示（过滤器链）",
+      "description": "stage1 ~ stage5 各条链的行为差异"
+    },
+    {
+      "name": "表单登录（Session + CSRF）",
+      "description": "stage4：Cookie 会话 + CSRF token"
+    }
+  ],
+  "paths": {
+    "/api/auth/login": {
+      "post": {
+        "tags": [
+          "认证（密码 + JWT）"
+        ],
+        "summary": "密码登录",
+        "description": "校验通过后签发 JWT，jti 写入白名单（Redis），同一账号再次登录会把上一个 token 踢下线。",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              },
+              "example": {
+                "username": "alice",
+                "password": "123456"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "登录成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultLoginResponse"
+                },
+                "example": {
+                  "code": 200,
+                  "message": "ok",
+                  "data": {
+                    "token": "eyJhbGciOiJIUzI1NiJ9...",
+                    "tokenType": "Bearer",
+                    "expiresIn": 7200,
+                    "username": "alice",
+                    "authorities": [
+                      "ARTICLE_DELETE",
+                      "ROLE_USER",
+                      "FACTOR_PASSWORD"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "参数校验失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultMap"
+                },
+                "example": {
+                  "code": 400,
+                  "message": "参数错误",
+                  "data": null
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "用户名或密码错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultMap"
+                },
+                "example": {
+                  "code": 401,
+                  "message": "用户名或密码错误",
+                  "data": null
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "账号禁用 / 锁定",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultMap"
+                },
+                "example": {
+                  "code": 403,
+                  "message": "账号已被锁定",
+                  "data": null
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/me": {
+      "get": {
+        "tags": [
+          "认证（密码 + JWT）"
+        ],
+        "summary": "当前登录用户",
+        "description": "把 token 里的身份回显给前端，刷新页面后用它恢复登录态。",
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultUserInfo"
+                },
+                "example": {
+                  "code": 200,
+                  "message": "ok",
+                  "data": {
+                    "username": "alice",
+                    "authorities": [
+                      "ARTICLE_DELETE",
+                      "ROLE_USER",
+                      "FACTOR_PASSWORD"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未登录 / token 失效",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultMap"
+                },
+                "example": {
+                  "code": 401,
+                  "message": "未登录或登录已过期",
+                  "data": null
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "tags": [
+          "认证（密码 + JWT）"
+        ],
+        "summary": "登出",
+        "description": "删掉白名单里的 jti，当前 token 立刻失效（不是等它自然过期）。",
+        "responses": {
+          "200": {
+            "description": "已登出",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultVoid"
+                },
+                "example": {
+                  "code": 200,
+                  "message": "ok",
+                  "data": null
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未登录 / token 失效",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultMap"
+                },
+                "example": {
+                  "code": 401,
+                  "message": "未登录或登录已过期",
+                  "data": null
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/auth/password": {
+      "put": {
+        "tags": [
+          "认证（密码 + JWT）"
+        ],
+        "summary": "修改密码",
+        "description": "改密后该账号所有 token 一并作废，需要重新登录。",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePasswordRequest"
+              },
+              "example": {
+                "oldPassword": "123456",
+                "newPassword": "654321"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "修改成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultVoid"
+                },
+                "example": {
+                  "code": 200,
+                  "message": "ok",
+                  "data": null
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "参数校验失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultMap"
+                },
+                "example": {
+                  "code": 400,
+                  "message": "参数错误",
+                  "data": null
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未登录 / token 失效",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultMap"
+                },
+                "example": {
+                  "code": 401,
+                  "message": "未登录或登录已过期",
+                  "data": null
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/auth/captcha": {
+      "get": {
+        "tags": [
+          "短信验证码登录"
+        ],
+        "summary": "获取图形验证码",
+        "description": "返回 uuid + PNG data URI。发短信前必须先过这一步，否则脚本能拿手机号列表把短信刷爆。",
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultCaptchaResponse"
+                },
+                "example": {
+                  "code": 200,
+                  "message": "ok",
+                  "data": {
+                    "uuid": "8f2c...",
+                    "image": "data:image/png;base64,iVBORw0...",
+                    "answer": "A3B7"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/auth/sms/code": {
+      "post": {
+        "tags": [
+          "短信验证码登录"
+        ],
+        "summary": "发送短信验证码",
+        "description": "先取图形验证码，把 uuid 和答案一起带上；同一手机号 60 秒内只能发一次（超了返回 429）。",
+        "parameters": [
+          {
+            "name": "phone",
+            "in": "query",
+            "description": "手机号",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "13800000001"
+            }
+          },
+          {
+            "name": "captchaUuid",
+            "in": "query",
+            "description": "图形验证码 uuid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "captchaCode",
+            "in": "query",
+            "description": "图形验证码答案",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "发送成功（演示模式会把验证码写在 message 里）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultString"
+                },
+                "example": {
+                  "code": 200,
+                  "message": "ok",
+                  "data": "验证码已发送（演示模式，验证码：482913）"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "没带图形验证码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultMap"
+                },
+                "example": {
+                  "code": 400,
+                  "message": "请先获取并填写图形验证码",
+                  "data": null
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "发送过于频繁",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultMap"
+                },
+                "example": {
+                  "code": 429,
+                  "message": "发送过于频繁，请稍后再试",
+                  "data": null
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/auth/sms/login": {
+      "post": {
+        "tags": [
+          "短信验证码登录"
+        ],
+        "summary": "短信验证码登录",
+        "description": "手机号未注册时自动建号并默认 USER 角色；账号被禁用 / 锁定同样会拒。",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SmsLoginRequest"
+              },
+              "example": {
+                "phone": "13800000001",
+                "code": "482913"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "登录成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultLoginResponse"
+                },
+                "example": {
+                  "code": 200,
+                  "message": "ok",
+                  "data": {
+                    "token": "eyJhbGciOiJIUzI1NiJ9...",
+                    "tokenType": "Bearer",
+                    "expiresIn": 7200,
+                    "username": "alice",
+                    "authorities": [
+                      "ARTICLE_DELETE",
+                      "ROLE_USER",
+                      "FACTOR_PASSWORD"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "验证码错误或已过期",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultMap"
+                },
+                "example": {
+                  "code": 400,
+                  "message": "验证码错误或已过期",
+                  "data": null
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/hello": {
+      "get": {
+        "tags": [
+          "业务接口（权限点 / @PreAuthorize）"
+        ],
+        "summary": "登录即可访问",
+        "description": "过滤器链上只要求 authenticated，用来验证认证是否生效。",
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultMap"
+                },
+                "example": {
+                  "code": 200,
+                  "message": "ok",
+                  "data": {
+                    "message": "你好，alice",
+                    "authorities": [
+                      "ARTICLE_DELETE",
+                      "ROLE_USER",
+                      "FACTOR_PASSWORD"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未登录 / token 失效",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultMap"
+                },
+                "example": {
+                  "code": 401,
+                  "message": "未登录或登录已过期",
+                  "data": null
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/admin/dashboard": {
+      "get": {
+        "tags": [
+          "业务接口（权限点 / @PreAuthorize）"
+        ],
+        "summary": "管理员面板",
+        "description": "链上要求 hasRole('ADMIN')：bob / carol 能过，alice 是 403。",
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultMap"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "权限不足",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultMap"
+                },
+                "example": {
+                  "code": 403,
+                  "message": "没有访问权限",
+                  "data": null
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/public/notice": {
+      "get": {
+        "tags": [
+          "业务接口（权限点 / @PreAuthorize）"
+        ],
+        "summary": "公开公告",
+        "description": "permitAll，匿名可读。",
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultString"
+                },
+                "example": {
+                  "code": 200,
+                  "message": "ok",
+                  "data": "这是公开公告，不需要登录"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/articles/{id}": {
+      "delete": {
+        "tags": [
+          "业务接口（权限点 / @PreAuthorize）"
+        ],
+        "summary": "删除文章（权限点）",
+        "description": "需要权限点 ARTICLE_DELETE。alice 有、bob 没有 —— 管理员不是万能的，角色和权限点是两套东西。",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "文章 ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "example": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "已删除",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultString"
+                },
+                "example": {
+                  "code": 200,
+                  "message": "ok",
+                  "data": "已删除文章 1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "权限不足",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultMap"
+                },
+                "example": {
+                  "code": 403,
+                  "message": "没有访问权限",
+                  "data": null
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/articles/{id}/review": {
+      "post": {
+        "tags": [
+          "业务接口（权限点 / @PreAuthorize）"
+        ],
+        "summary": "批改文章（方法级注解）",
+        "description": "@PreAuthorize(\"hasRole('AUDITOR')\") 写在 Service 实现类上，靠代理生效；bob / erin 能过，alice 是 403。",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "文章 ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "example": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "已批改",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultString"
+                },
+                "example": {
+                  "code": 200,
+                  "message": "ok",
+                  "data": "已批改文章 1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "权限不足",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultMap"
+                },
+                "example": {
+                  "code": 403,
+                  "message": "没有访问权限",
+                  "data": null
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/articles/self-invoke-review": {
+      "post": {
+        "tags": [
+          "业务接口（权限点 / @PreAuthorize）"
+        ],
+        "summary": "反例：同类内部调用",
+        "description": "selfInvokeReview 直接调 this.review(id)，不走代理，@PreAuthorize 不生效 —— 用它验证「注解失效」这个坑。",
+        "responses": {
+          "200": {
+            "description": "已批改（注解没生效，任何登录用户都能调）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultString"
+                },
+                "example": {
+                  "code": 200,
+                  "message": "ok",
+                  "data": "已批改（同类内部调用，@PreAuthorize 未生效）"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未登录 / token 失效",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultMap"
+                },
+                "example": {
+                  "code": 401,
+                  "message": "未登录或登录已过期",
+                  "data": null
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/stage1/hello": {
+      "get": {
+        "tags": [
+          "阶段演示（过滤器链）"
+        ],
+        "summary": "① 全拦截",
+        "description": "anyRequest().authenticated() + httpBasic，点 Apifox 的 Basic Auth 填 alice/123456 即可。",
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultMap"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未登录 / token 失效",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultMap"
+                },
+                "example": {
+                  "code": 401,
+                  "message": "未登录或登录已过期",
+                  "data": null
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "basicAuth": []
+          }
+        ]
+      }
+    },
+    "/stage2/public/notice": {
+      "get": {
+        "tags": [
+          "阶段演示（过滤器链）"
+        ],
+        "summary": "② 白名单：公开路径",
+        "description": "permitAll。",
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultString"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/stage2/articles/{id}": {
+      "get": {
+        "tags": [
+          "阶段演示（过滤器链）"
+        ],
+        "summary": "② 白名单：GET 放行",
+        "description": "同一路径按 HTTP 方法区分，GET 匿名可读。",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "文章 ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "example": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultString"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      },
+      "delete": {
+        "tags": [
+          "阶段演示（过滤器链）"
+        ],
+        "summary": "② 白名单：DELETE 要登录",
+        "description": "还是那个路径，DELETE 落到 authenticated()，匿名请求返回 401；带 Basic Auth 才放行。",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "文章 ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "example": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultString"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未登录 / token 失效",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultMap"
+                },
+                "example": {
+                  "code": 401,
+                  "message": "未登录或登录已过期",
+                  "data": null
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "basicAuth": []
+          }
+        ]
+      }
+    },
+    "/stage3/admin/users": {
+      "get": {
+        "tags": [
+          "阶段演示（过滤器链）"
+        ],
+        "summary": "③ 角色：hasRole(ADMIN)",
+        "description": "只有 bob / carol（ROLE_ADMIN）。这条链是 httpBasic，用 Basic Auth 而不是 Bearer。",
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultMap"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "权限不足",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultMap"
+                },
+                "example": {
+                  "code": 403,
+                  "message": "没有访问权限",
+                  "data": null
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "basicAuth": []
+          }
+        ]
+      }
+    },
+    "/stage3/ops/metrics": {
+      "get": {
+        "tags": [
+          "阶段演示（过滤器链）"
+        ],
+        "summary": "③ 角色：hasAnyRole(ADMIN, AUDITOR)",
+        "description": "bob / carol / erin 都能过（ADMIN 或 AUDITOR）。httpBasic 认证。",
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultMap"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "权限不足",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultMap"
+                },
+                "example": {
+                  "code": 403,
+                  "message": "没有访问权限",
+                  "data": null
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "basicAuth": []
+          }
+        ]
+      }
+    },
+    "/stage3/audit/logs": {
+      "get": {
+        "tags": [
+          "阶段演示（过滤器链）"
+        ],
+        "summary": "③ 角色：hasAllRoles(ADMIN, AUDITOR)",
+        "description": "两个角色都得有：只有 bob（ADMIN + AUDITOR）能过，carol 少一个就 403。httpBasic 认证。",
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultMap"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "权限不足",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultMap"
+                },
+                "example": {
+                  "code": 403,
+                  "message": "没有访问权限",
+                  "data": null
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "basicAuth": []
+          }
+        ]
+      }
+    },
+    "/stage3/articles/{id}": {
+      "delete": {
+        "tags": [
+          "阶段演示（过滤器链）"
+        ],
+        "summary": "③ 权限点：hasAuthority(ARTICLE_DELETE)",
+        "description": "只看权限点，不看角色：alice 能删，bob 是管理员但没这个权限点，照样 403。httpBasic 认证。",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "文章 ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "example": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultString"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "权限不足",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultMap"
+                },
+                "example": {
+                  "code": 403,
+                  "message": "没有访问权限",
+                  "data": null
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "basicAuth": []
+          }
+        ]
+      }
+    },
+    "/stage5/hello": {
+      "get": {
+        "tags": [
+          "阶段演示（过滤器链）"
+        ],
+        "summary": "⑤ JWT 链：登录即可",
+        "description": "练习 1 新增的独立链，走 JWT 过滤器。",
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultMap"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未登录 / token 失效",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultMap"
+                },
+                "example": {
+                  "code": 401,
+                  "message": "未登录或登录已过期",
+                  "data": null
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/stage5/admin/dashboard": {
+      "get": {
+        "tags": [
+          "阶段演示（过滤器链）"
+        ],
+        "summary": "⑤ JWT 链：/admin/** 要 ADMIN",
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultMap"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "权限不足",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultMap"
+                },
+                "example": {
+                  "code": 403,
+                  "message": "没有访问权限",
+                  "data": null
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/stage4/csrf": {
+      "get": {
+        "tags": [
+          "表单登录（Session + CSRF）"
+        ],
+        "summary": "取 CSRF token",
+        "description": "返回 token 与 headerName，前端把 token 放进隐藏域或 X-XSRF-TOKEN 头。",
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultMap"
+                },
+                "example": {
+                  "code": 200,
+                  "message": "ok",
+                  "data": {
+                    "token": "ab0eb2d9-da05-4803-9c61-8d8514f1a61f",
+                    "headerName": "X-XSRF-TOKEN",
+                    "parameterName": "_csrf"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/stage4/me": {
+      "get": {
+        "tags": [
+          "表单登录（Session + CSRF）"
+        ],
+        "summary": "当前会话用户",
+        "description": "表单登录成功后的会话信息（Cookie: JSESSIONID）。\n\n注意：这条返回的是 **HTML 页面**，不是 JSON —— 用来演示「同一批接口里，有的给前端页面、有的给 JSON」。",
+        "responses": {
+          "200": {
+            "description": "已登录，返回 HTML 页面",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未登录 / token 失效",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultMap"
+                },
+                "example": {
+                  "code": 401,
+                  "message": "未登录或登录已过期",
+                  "data": null
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "LoginRequest": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string",
+            "description": "用户名",
+            "example": "alice"
+          },
+          "password": {
+            "type": "string",
+            "description": "密码",
+            "example": "123456"
+          }
+        },
+        "required": [
+          "username",
+          "password"
+        ]
+      },
+      "LoginResponse": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "JWT，放在 Authorization: Bearer 后面"
+          },
+          "tokenType": {
+            "type": "string",
+            "description": "固定 Bearer",
+            "example": "Bearer"
+          },
+          "expiresIn": {
+            "type": "integer",
+            "description": "有效期（秒）",
+            "example": 7200
+          },
+          "username": {
+            "type": "string"
+          },
+          "authorities": {
+            "type": "array",
+            "description": "权限列表，角色带 ROLE_ 前缀",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "example": {
+          "token": "eyJhbGciOiJIUzI1NiJ9...",
+          "tokenType": "Bearer",
+          "expiresIn": 7200,
+          "username": "alice",
+          "authorities": [
+            "ARTICLE_DELETE",
+            "ROLE_USER",
+            "FACTOR_PASSWORD"
+          ]
+        }
+      },
+      "UserInfo": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string"
+          },
+          "authorities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "example": {
+          "username": "alice",
+          "authorities": [
+            "ARTICLE_DELETE",
+            "ROLE_USER",
+            "FACTOR_PASSWORD"
+          ]
+        }
+      },
+      "ChangePasswordRequest": {
+        "type": "object",
+        "properties": {
+          "oldPassword": {
+            "type": "string",
+            "description": "原密码",
+            "example": "123456"
+          },
+          "newPassword": {
+            "type": "string",
+            "description": "新密码，6~32 位",
+            "example": "654321"
+          }
+        },
+        "required": [
+          "oldPassword",
+          "newPassword"
+        ]
+      },
+      "SmsLoginRequest": {
+        "type": "object",
+        "properties": {
+          "phone": {
+            "type": "string",
+            "description": "手机号",
+            "example": "13800000001"
+          },
+          "code": {
+            "type": "string",
+            "description": "6 位数字验证码",
+            "example": "123456"
+          }
+        },
+        "required": [
+          "phone",
+          "code"
+        ]
+      },
+      "CaptchaResponse": {
+        "type": "object",
+        "properties": {
+          "uuid": {
+            "type": "string",
+            "description": "提交时回传的 captchaUuid"
+          },
+          "image": {
+            "type": "string",
+            "description": "PNG 的 data URI，直接塞进 <img src>"
+          },
+          "answer": {
+            "type": "string",
+            "description": "演示模式才返回答案，生产环境应置空"
+          }
+        },
+        "example": {
+          "uuid": "8f2c...",
+          "image": "data:image/png;base64,iVBORw0...",
+          "answer": "A3B7"
+        }
+      },
+      "ResultLoginResponse": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/LoginResponse"
+          }
+        }
+      },
+      "ResultUserInfo": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/UserInfo"
+          }
+        }
+      },
+      "ResultCaptchaResponse": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/CaptchaResponse"
+          }
+        }
+      },
+      "ResultString": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "example": 200
+          },
+          "message": {
+            "type": "string",
+            "example": "ok"
+          },
+          "data": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "ResultMap": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "example": 200
+          },
+          "message": {
+            "type": "string",
+            "example": "ok"
+          },
+          "data": {
+            "type": "object"
+          }
+        }
+      },
+      "ResultVoid": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "example": 200
+          },
+          "message": {
+            "type": "string",
+            "example": "ok"
+          },
+          "data": {
+            "type": "object",
+            "nullable": true
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      },
+      "basicAuth": {
+        "type": "http",
+        "scheme": "basic"
+      }
+    }
+  }
+}
