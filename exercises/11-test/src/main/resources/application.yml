@@ -1,0 +1,10 @@
+server:
+  port: 8011
+
+spring:
+  application:
+    name: 11-测试
+
+logging:
+  level:
+    top.zsj.test: INFO
