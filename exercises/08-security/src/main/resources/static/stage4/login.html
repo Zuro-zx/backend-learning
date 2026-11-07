@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>stage4 · 表单登录</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+            font-family: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+            background: #0f1115; color: #e6e8eb;
+        }
+        .card {
+            width: 340px; padding: 28px 30px; background: #181b21;
+            border: 1px solid #2a2f3a; border-radius: 12px;
+        }
+        h1 { font-size: 18px; margin: 0 0 6px; }
+        p.hint { margin: 0 0 20px; font-size: 12px; color: #8b949e; line-height: 1.6; }
+        label { display: block; font-size: 13px; margin: 14px 0 6px; color: #b7bdc8; }
+        input[type=text], input[type=password] {
+            width: 100%; padding: 9px 11px; font-size: 14px; color: #e6e8eb;
+            background: #0f1115; border: 1px solid #2f3644; border-radius: 7px; outline: none;
+        }
+        input:focus { border-color: #3b82f6; }
+        button {
+            width: 100%; margin-top: 20px; padding: 10px; font-size: 14px; cursor: pointer;
+            color: #fff; background: #2563eb; border: none; border-radius: 7px;
+        }
+        button:hover { background: #1d4ed8; }
+        .msg { margin-top: 14px; font-size: 12.5px; }
+        .err { color: #f87171; }
+        .ok { color: #7ee787; }
+        .accounts { margin-top: 18px; font-size: 12px; color: #8b949e; line-height: 1.7; border-top: 1px solid #232833; padding-top: 12px; }
+        code { color: #7ee787; }
+    </style>
+</head>
+<body>
+<div class="card">
+    <h1>stage4 · 表单登录</h1>
+    <p class="hint">这条链演示传统 Web：登录页 + Session + CSRF token，与 JWT 链完全独立。</p>
+
+    <form id="loginForm" method="post" action="/stage4/login">
+        <label for="username">用户名</label>
+        <input id="username" type="text" name="username" autocomplete="username" required>
+
+        <label for="password">密码</label>
+        <input id="password" type="password" name="password" autocomplete="current-password" required>
+
+        <!-- CSRF token 由下方脚本从 /stage4/csrf 取回后填入 -->
+        <input id="csrf" type="hidden" name="_csrf">
+        <button type="submit">登录</button>
+    </form>
+
+    <div id="msg" class="msg"></div>
+
+    <div class="accounts">
+        演示账号：<code>alice / 123456</code>（USER）<br>
+        <code>bob / 123456</code>（ADMIN + AUDITOR）<br>
+        <code>dave / 123456</code>（已禁用）
+    </div>
+</div>
+
+<script>
+    const params = new URLSearchParams(location.search);
+    const msg = document.getElementById('msg');
+    if (params.has('error')) {
+        msg.textContent = '用户名或密码错误，或账号不可用';
+        msg.className = 'msg err';
+    } else if (params.has('logout')) {
+        msg.textContent = '已退出登录';
+        msg.className = 'msg ok';
+    }
+
+    // 静态页拿不到服务端渲染的 token，单独取一次
+    fetch('/stage4/csrf', { credentials: 'same-origin' })
+        .then(r => r.json())
+        .then(j => { document.getElementById('csrf').value = j.data.token; })
+        .catch(() => {
+            msg.textContent = '获取 CSRF token 失败，请刷新重试';
+            msg.className = 'msg err';
+        });
+</script>
+</body>
+</html>

@@ -1,0 +1,64 @@
+server:
+  port: 8008
+
+spring:
+  application:
+    name: 08-认证与授权
+
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    # 独立库 security_practice：本机 09-security 已占用 backend_learning 的 sec_user / sec_role，
+    # 两套表结构不同，共库会互相覆盖，所以这里单独建库，表名保持与教程一致
+    url: jdbc:mysql://localhost:3306/security_practice?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    username: root
+    password: 123456
+    hikari:
+      pool-name: security-demo-pool
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 3000
+
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema.sql
+      data-locations: classpath:data.sql
+      encoding: UTF-8
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      # 本机 Redis 未设置 requirepass，密码留空；写了空串反而会报
+      # "ERR Client sent AUTH, but no password is set"
+      # password: abc123
+      database: 11
+      timeout: 3s
+
+zsj:
+  security:
+    jwt:
+      # 64 个十六进制字符 = UTF-8 下 64 字节，Keys.hmacShaKeyFor 会选 HS512
+      # 真实项目从环境变量注入：secret: ${JWT_SECRET}
+      secret: 3f2b8d1e7c9a4f6b0d5e8a2c7f1b9d4e6a3c8f2b5d7e9a1c4f6b8d2e5a7c9f1b
+      expire-minutes: 120
+      # redis：jti 白名单 + 单端登录；memory：进程内 Map，测试与无 Redis 环境用
+      store: redis
+    sms:
+      store: redis
+      expose-code: true
+      code-ttl: 5m
+      send-interval: 60s
+      max-fail-count: 5
+      auto-register: true
+      captcha-ttl: 2m
+    cors:
+      allowed-origins:
+        - http://localhost:5173
+        - http://localhost:3000
+        - http://127.0.0.1:5173
+
+logging:
+  level:
+    org.springframework.security: INFO
+    top.zsj.security: INFO
