@@ -1,0 +1,43 @@
+server:
+  port: 8012
+
+spring:
+  application:
+    name: 12-monitor
+
+# 自定义信息，由 AppInfoContributor 读出来塞进 /actuator/info
+app:
+  version: 0.0.1-SNAPSHOT
+  owner: zsj
+  inventory:
+    low-stock-threshold: 5
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # 生产上别照抄这一行：env / beans / loggers 都会暴露内部结构，
+        # 按需开关，并且一定要配合 Spring Security 做鉴权
+        include: health,info,metrics,prometheus,loggers
+  endpoint:
+    health:
+      # never / when-authorized / always：always 会把每个 HealthIndicator 的 details 都吐出来
+      show-details: always
+      probes:
+        # 不开这个，非 Kubernetes 环境下没有 /actuator/health/liveness 与 /readiness
+        enabled: true
+  info:
+    env:
+      enabled: true
+  metrics:
+    tags:
+      # 所有指标自动带上 application 标签，多实例抓到一起后能靠它区分服务
+      application: 12-monitor
+    distribution:
+      percentiles-histogram:
+        # 开了才会输出 _bucket，才能在 Prometheus 里算 P95 / P99
+        biz.order.process: true
+
+logging:
+  level:
+    top.zsj.monitor: INFO
