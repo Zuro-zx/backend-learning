@@ -49,6 +49,24 @@ java -jar exercises/12-monitor/target/12-monitor-0.0.1-SNAPSHOT.jar --server.por
 2. 目录「认证（密码 + JWT）」的**目录级 Auth** 设为 `Bearer Token`，值 `{{token}}`；
 3. 点一次登录，之后该目录下的接口自动带 token。
 
+### 「认证（密码 + JWT）」这 4 个接口照抄就能跑
+
+| 接口 | 要填的页签 | 填什么 |
+| --- | --- | --- |
+| `POST /api/auth/login` 密码登录 | **Body → JSON** | `{"username":"alice","password":"123456"}`，Auth 选 **No Auth** |
+| `GET /api/auth/me` 当前登录用户 | 无参数，**Auth → Bearer Token** | `{{token}}`（或直接粘 `data.token` 的整串） |
+| `POST /api/auth/logout` 登出 | 无参数，**Auth → Bearer Token** | 同上 |
+| `PUT /api/auth/password` 修改密码 | **Body → JSON**，**Auth → Bearer Token** | `{"oldPassword":"123456","newPassword":"654321"}` |
+
+必须按这个顺序点：**先登录 → 拿到 token → 再点后三个**，否则一片 401。
+
+改密有三个真实现象，别误判成 bug：
+
+- 成功返回 `{"code":200,"data":null,"message":"ok"}`，但**同一秒内当前 token 就失效**了——改密会 revoke 该账号全部 token，
+  再用旧 token 调 `/me` 得到 `401 账号已在其他设备登录，请重新登录`。
+- **新密码是真的写进数据库的**，之后登录要用新密码。练完记得改回 `123456`，或者用 erin 这类不常用的账号试。
+- 新密码 5 位返回 `400 新密码长度 6~32 位`；原密码填错返回 `401 原密码不正确`（和登录的"用户名或密码错误"刻意区分开）。
+
 ## 六个账号（密码统一 `123456`）
 
 | 账号 | 角色 / 权限点 | 状态 | 用来验什么 |
