@@ -67,6 +67,123 @@ java -jar exercises/12-monitor/target/12-monitor-0.0.1-SNAPSHOT.jar --server.por
 - **新密码是真的写进数据库的**，之后登录要用新密码。练完记得改回 `123456`，或者用 erin 这类不常用的账号试。
 - 新密码 5 位返回 `400 新密码长度 6~32 位`；原密码填错返回 `401 原密码不正确`（和登录的"用户名或密码错误"刻意区分开）。
 
+### 手把手：4 个接口逐页签怎么填
+
+先确认服务活着（`curl http://localhost:8008/api/public/notice` 返回 200），并确认 Apifox 左下角
+环境选的是导入时生成的那个（前置 URL = `http://localhost:8008`）。若地址栏还会显示域名，
+直接把整串 `http://localhost:8008/api/auth/login` 填进去，别依赖前置 URL。
+
+**① `POST /api/auth/login`（密码登录）**
+
+| 页签 | 怎么填 |
+| --- | --- |
+| 方法 / 地址 | `POST` + `/api/auth/login` |
+| Params | 全部留空（没有 query 参数） |
+| Body | 选 **json**，不要选 form-data / x-www-form-urlencoded |
+| Auth | **No Auth** |
+
+```json
+{
+  "username": "alice",
+  "password": "123456"
+}
+```
+
+后端是 `@Valid @RequestBody LoginRequest`（record），Form 表单绑不上，会直接 400/415。
+
+发送后应看到（token 已截断）：
+
+```json
+{
+  "code": 200,
+  "message": "ok",
+  "data": {
+    "token": "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJlcmluIi...",
+    "tokenType": "Bearer",
+    "expiresIn": 7200,
+    "username": "erin",
+    "authorities": ["ROLE_AUDITOR", "FACTOR_PASSWORD"]
+  }
+}
+```
+
+- `expiresIn` 是**秒**，7200 = 2 小时；
+- `authorities` 里的 `FACTOR_PASSWORD` 是 Security 7 自动加的认证因子，不是脏数据；
+- `username` / `password` 字段名区分大小写，写成 `userName` 会变成 null → `400 用户名不能为空`。
+
+**② 把 token 存成环境变量（二选一）**
+
+手工：右上角环境名 → **管理环境** → 选中当前环境 →「变量」页 → 新增：变量名 `token`、
+类型 `string`、**默认值和当前值都粘上** → 保存。
+
+自动：打开登录请求 → **后置操作 → 添加后置操作 → 提取变量**，变量名 `token`、
+来源「响应 JSON」、JSONPath `$.data.token`、作用域「环境」。之后每点一次登录自动更新。
+
+想让后三个接口自动带上，就在目录「认证（密码 + JWT）」上**右键 → 编辑目录 → Auth →
+Bearer Token → `{{token}}`**，不必逐个请求配。
+
+**③ `GET /api/auth/me`**
+
+- 方法 `GET`，地址 `/api/auth/me`，Params 留空；
+- **Body 选 none** —— 从 POST 切过来时 Apifox 可能残留上一份 JSON，GET 带 body 有些服务器会拒；
+- Auth → **Bearer Token** → 值填 `{{token}}`（或整串 token）。
+
+⚠️ 值里**不要自己写 `Bearer ` 前缀**，Apifox 会拼成 `Authorization: Bearer {{token}}`；
+写两遍会变成 `Bearer Bearer eyJ...`，直接 401。
+
+成功返回：
+
+```json
+{"code":200,"message":"ok","data":{"username":"erin","authorities":["ROLE_AUDITOR","FACTOR_PASSWORD"]}}
+```
+
+**④ `POST /api/auth/logout`**
+
+无参数、Body none、Auth 填 Bearer token。返回 `{"code":200,"message":"ok","data":null}`。
+紧接着拿同一个 token 再点 ③，会得到
+`401 账号已在其他设备登录，请重新登录` —— 白名单里的 jti 被删了，这是预期行为。
+所以 logout 放最后点，点完要重新登录。
+
+**⑤ `PUT /api/auth/password`**
+
+| 页签 | 怎么填 |
+| --- | --- |
+| 方法 / 地址 | `PUT` + `/api/auth/password` |
+| Body | **json** |
+| Auth | **Bearer Token** |
+
+```json
+{
+  "oldPassword": "123456",
+  "newPassword": "654321"
+}
+```
+
+`oldPassword` 必填；`newPassword` 必填且 6~32 位。三种真实返回：
+
+| 场景 | HTTP | 响应 |
+| --- | --- | --- |
+| 成功 | 200 | `{"code":200,"message":"ok","data":null}` |
+| 原密码错 | 401 | `{"code":401,"message":"原密码不正确","data":null}` |
+| 新密码 5 位 | 400 | `{"code":400,"message":"新密码长度 6~32 位","data":null}` |
+
+改密成功的那一刻，该账号所有 token 全部作废，当前这个也不例外（再调 ③ 会 401）。
+新密码是真的写进数据库的，练完记得改回去，或者拿 `erin` 试。
+
+### 报错对照表
+
+| 看到的响应 | 真实原因 | 怎么办 |
+| --- | --- | --- |
+| 401 `未登录或登录已过期` | 没配 Auth / 变量为空 / token 过期（2h） | 重新点登录，检查 `{{token}}` 是否有值 |
+| 401 `账号已在其他设备登录，请重新登录` | 同账号又登录了一次，或登出/改密后还用旧 token | 用最新 token；单端登录只保留一个 jti |
+| 401 `用户名或密码错误` | 密码错（多半是之前改过没改回来） | 用 `123456`，或换账号 |
+| 400 `用户名不能为空` | Body 不是 json，或字段名写成 `userName` | Body 选 json，字段名照抄 |
+| 403 `账号已被禁用` / `账号已被锁定` | 用了 dave / frank | 换 alice / bob / carol / erin |
+| 415 `Unsupported Media Type` | Content-Type 被手改成 form 或 text | 删掉自定义 Content-Type，让 Apifox 自动生成 |
+
+**最容易莫名卡住的一点**：同一个账号在两处各登录一次，后登录的会把先登录的 token 顶掉
+（Redis 里 `user:token:{username}` 只存一个 jti）。所以别在两个窗口交替点同一账号的接口。
+
 ## 六个账号（密码统一 `123456`）
 
 | 账号 | 角色 / 权限点 | 状态 | 用来验什么 |
